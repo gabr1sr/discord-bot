@@ -16,6 +16,17 @@ async fn age(
     Ok(())
 }
 
+#[poise::command(slash_command, prefix_command)]
+async fn invidious(
+    ctx: Context<'_>,
+    #[description = "YouTube URL"] url: Option<String>,
+) -> Result<(), Error> {
+    let video_url = url.unwrap_or_else(|| "https://www.youtube.com/".to_string());
+    let new_url = video_url.replace("www.youtube.com", "invidious.nerdvpn.de");
+    ctx.say(new_url).await?;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() {
     dotenv().ok();
@@ -24,7 +35,7 @@ async fn main() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![age()],
+            commands: vec![age(), invidious()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
