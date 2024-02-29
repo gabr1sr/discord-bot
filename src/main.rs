@@ -32,19 +32,17 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 async fn main() {
     dotenv().ok();
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+
     let intents =
         serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
 
     let mut commands = vec![commands::misc::ping(), commands::utility::help()];
-
     let translations = translation::read_ftl().expect("failed to read translation files");
-
     translation::apply_translations(&translations, &mut commands);
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands,
-
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("!".into()),
                 edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
@@ -52,25 +50,19 @@ async fn main() {
                 ))),
                 ..Default::default()
             },
-
             on_error: |error| Box::pin(on_error(error)),
-
             pre_command: |ctx| {
                 Box::pin(async move {
                     println!("Executing command {}...", ctx.command().qualified_name);
                 })
             },
-
             post_command: |ctx| {
                 Box::pin(async move {
                     println!("Executed command {}!", ctx.command().qualified_name);
                 })
             },
-
             command_check: Some(|ctx| Box::pin(async move { Ok(!ctx.author().bot) })),
-
             skip_checks_for_owners: false,
-
             event_handler: |_ctx, event, _framework, _data| {
                 Box::pin(async move {
                     println!(
@@ -80,7 +72,6 @@ async fn main() {
                     Ok(())
                 })
             },
-
             ..Default::default()
         })
         .setup(|ctx, ready, framework| {
