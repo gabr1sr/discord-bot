@@ -1,12 +1,16 @@
-use std::time::Duration;
 use std::sync::Arc;
+use std::time::Duration;
 
-use poise::serenity_prelude as serenity;
 use dotenv::dotenv;
+use poise::serenity_prelude as serenity;
 
 pub mod commands;
+pub mod translation;
 
-pub struct Data {}
+pub struct Data {
+    translations: translation::Translations,
+}
+
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
@@ -28,14 +32,18 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 async fn main() {
     dotenv().ok();
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
-    let intents = serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
+    let intents =
+        serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
+
+    let mut commands = vec![commands::misc::ping(), commands::utility::help()];
+
+    let translations = translation::read_ftl().expect("failed to read translation files");
+
+    translation::apply_translations(&translations, &mut commands);
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![
-                commands::misc::ping(),
-                commands::utility::help()
-            ],
+            commands,
 
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("!".into()),
@@ -59,17 +67,16 @@ async fn main() {
                 })
             },
 
-            command_check: Some(|ctx| {
-                Box::pin(async move {
-                    Ok(!ctx.author().bot)
-                })
-            }),
+            command_check: Some(|ctx| Box::pin(async move { Ok(!ctx.author().bot) })),
 
             skip_checks_for_owners: false,
 
             event_handler: |_ctx, event, _framework, _data| {
                 Box::pin(async move {
-                    println!("Got an event in event handler: {:?}", event.snake_case_name());
+                    println!(
+                        "Got an event in event handler: {:?}",
+                        event.snake_case_name()
+                    );
                     Ok(())
                 })
             },
@@ -80,7 +87,7 @@ async fn main() {
             Box::pin(async move {
                 println!("Logged in as {}", ready.user.name);
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {})
+                Ok(Data { translations })
             })
         })
         .build();
