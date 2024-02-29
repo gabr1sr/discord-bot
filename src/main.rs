@@ -1,45 +1,84 @@
+use std::time::Duration;
+use std::sync::Arc;
+
 use poise::serenity_prelude as serenity;
 use dotenv::dotenv;
 
-struct Data {}
+pub mod commands;
+
+pub struct Data {}
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
-#[poise::command(slash_command, prefix_command)]
-async fn age(
-    ctx: Context<'_>,
-    #[description = "Selected user"] user: Option<serenity::User>,
-) -> Result<(), Error> {
-    let u = user.as_ref().unwrap_or_else(|| ctx.author());
-    let res = format!("{}'s account was created at {}", u.name, u.created_at());
-    ctx.say(res).await?;
-    Ok(())
-}
-
-#[poise::command(slash_command, prefix_command)]
-async fn invidious(
-    ctx: Context<'_>,
-    #[description = "YouTube URL"] url: Option<String>,
-) -> Result<(), Error> {
-    let video_url = url.unwrap_or_else(|| "https://www.youtube.com/".to_string());
-    let new_url = video_url.replace("www.youtube.com", "invidious.nerdvpn.de");
-    ctx.say(new_url).await?;
-    Ok(())
+async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
+    match error {
+        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {:?}", error),
+        poise::FrameworkError::Command { error, ctx, .. } => {
+            println!("Error in command `{}`: {:?}", ctx.command().name, error);
+        }
+        error => {
+            if let Err(e) = poise::builtins::on_error(error).await {
+                println!("Error while handling error: {}", e)
+            }
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
-    let intents = serenity::GatewayIntents::non_privileged();
+    let intents = serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![age(), invidious()],
+            commands: vec![
+                commands::misc::ping(),
+                commands::utility::help()
+            ],
+
+            prefix_options: poise::PrefixFrameworkOptions {
+                prefix: Some("!".into()),
+                edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
+                    Duration::from_secs(3600),
+                ))),
+                ..Default::default()
+            },
+
+            on_error: |error| Box::pin(on_error(error)),
+
+            pre_command: |ctx| {
+                Box::pin(async move {
+                    println!("Executing command {}...", ctx.command().qualified_name);
+                })
+            },
+
+            post_command: |ctx| {
+                Box::pin(async move {
+                    println!("Executed command {}!", ctx.command().qualified_name);
+                })
+            },
+
+            command_check: Some(|ctx| {
+                Box::pin(async move {
+                    Ok(!ctx.author().bot)
+                })
+            }),
+
+            skip_checks_for_owners: false,
+
+            event_handler: |_ctx, event, _framework, _data| {
+                Box::pin(async move {
+                    println!("Got an event in event handler: {:?}", event.snake_case_name());
+                    Ok(())
+                })
+            },
+
             ..Default::default()
         })
-        .setup(|ctx, _ready, framework| {
+        .setup(|ctx, ready, framework| {
             Box::pin(async move {
+                println!("Logged in as {}", ready.user.name);
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {})
             })
