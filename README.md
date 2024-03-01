@@ -20,12 +20,6 @@ Create a new `.env` file and inform the values:
 DISCORD_TOKEN=
 ```
 
-### Installing Dependencies
-Open your terminal and type:
-```sh
-cargo install --locked
-```
-
 ### Build and Run
 To build the whole project:
 ```sh
