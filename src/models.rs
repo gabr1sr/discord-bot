@@ -1,4 +1,4 @@
-#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, poise::ChoiceParameter)]
 #[sqlx(type_name = "severity", rename_all = "lowercase")]
 pub enum Severity {
     Low,
@@ -6,7 +6,7 @@ pub enum Severity {
     High,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, poise::ChoiceParameter)]
 #[sqlx(type_name = "punishment", rename_all = "lowercase")]
 pub enum Punishment {
     Strike,

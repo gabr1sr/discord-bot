@@ -116,6 +116,24 @@ pub fn apply_translations(
                 format(bundle, &command.name, Some("description"), None).unwrap(),
             );
 
+            for subcommand in &mut command.subcommands {
+                subcommand.name_localizations.insert(
+                    locale.clone(),
+                    format(bundle, &command.name, Some(&subcommand.name), None).unwrap(),
+                );
+
+                subcommand.description_localizations.insert(
+                    locale.clone(),
+                    format(
+                        bundle,
+                        &command.name,
+                        Some(&format!("{}-description", subcommand.name)),
+                        None,
+                    )
+                    .unwrap(),
+                );
+            }
+
             for parameter in &mut command.parameters {
                 // Insert localized parameter name and description
                 parameter.name_localizations.insert(
@@ -137,7 +155,13 @@ pub fn apply_translations(
                 for choice in &mut parameter.choices {
                     choice.localizations.insert(
                         locale.clone(),
-                        format(bundle, &choice.name, None, None).unwrap(),
+                        format(
+                            bundle,
+                            &command.name,
+                            Some(&format!("{}-{}", parameter.name, choice.name)),
+                            None
+                        )
+                        .unwrap(),
                     );
                 }
             }
@@ -156,6 +180,19 @@ pub fn apply_translations(
         command.description =
             Some(format(bundle, &command.name, Some("description"), None).unwrap());
 
+        for subcommand in &mut command.subcommands {
+            subcommand.name = format(bundle, &command.name, Some(&subcommand.name), None).unwrap();
+            subcommand.description = Some(
+                format(
+                    bundle,
+                    &command.name,
+                    Some(&format!("{}-description", subcommand.name)),
+                    None,
+                )
+                .unwrap(),
+            );
+        }
+        
         for parameter in &mut command.parameters {
             // Set fallback parameter name and description to en-US
             parameter.name = format(bundle, &command.name, Some(&parameter.name), None).unwrap();
@@ -171,7 +208,13 @@ pub fn apply_translations(
 
             // If this is a choice parameter, set the choice names to en-US
             for choice in &mut parameter.choices {
-                choice.name = format(bundle, &choice.name, None, None).unwrap();
+                choice.name = format(
+                    bundle,
+                    &command.name,
+                    Some(&format!("{}-{}", parameter.name, choice.name)),
+                    None,
+                )
+                .unwrap();
             }
         }
     }
