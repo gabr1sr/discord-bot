@@ -7,6 +7,7 @@ use poise::serenity_prelude as serenity;
 pub mod commands;
 pub mod database;
 pub mod translation;
+pub mod models;
 
 use database::Database;
 
@@ -39,10 +40,7 @@ async fn main() {
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
     let db_url = std::env::var("DATABASE_URL").expect("missing DATABASE_URL");
 
-    let database = match Database::new(db_url).await {
-        Ok(data) => data,
-        Err(e) => panic!("database error: {}", e),
-    };
+    let database = Database::new(db_url).await.unwrap();
 
     let intents =
         serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;

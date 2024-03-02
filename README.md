@@ -33,6 +33,11 @@ To build the whole project:
 cargo build
 ```
 
+Create database and run migrations:
+```sh
+cargo sqlx database setup
+```
+
 To run the project:
 ```sh
 cargo run
