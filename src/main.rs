@@ -5,10 +5,14 @@ use dotenv::dotenv;
 use poise::serenity_prelude as serenity;
 
 pub mod commands;
+pub mod database;
 pub mod translation;
+
+use database::Database;
 
 pub struct Data {
     translations: translation::Translations,
+    database: Database,
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -31,12 +35,27 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 #[tokio::main]
 async fn main() {
     dotenv().ok();
+
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let db_host = std::env::var("DATABASE_HOST").expect("missing DATABASE_HOST");
+    let db_port = std::env::var("DATABASE_PORT").expect("missing DATABASE_PORT");
+    let db_user = std::env::var("DATABASE_USER").expect("missing DATABASE_USER");
+    let db_password = std::env::var("DATABASE_PASSWORD").expect("missing DATABASE_PASSWORD");
+
+    let database = match Database::new(db_host, db_port, db_user, db_password).await {
+        Ok(data) => data,
+        Err(e) => panic!("database error: {}", e),
+    };
 
     let intents =
         serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
 
-    let mut commands = vec![commands::misc::ping(), commands::utility::help()];
+    let mut commands = vec![
+        commands::misc::ping(),
+        commands::utility::help(),
+        commands::misc::database(),
+    ];
+
     let translations = translation::read_ftl().expect("failed to read translation files");
     translation::apply_translations(&translations, &mut commands);
 
@@ -78,7 +97,10 @@ async fn main() {
             Box::pin(async move {
                 println!("Logged in as {}", ready.user.name);
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data { translations })
+                Ok(Data {
+                    translations,
+                    database,
+                })
             })
         })
         .build();

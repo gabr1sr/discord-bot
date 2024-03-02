@@ -13,11 +13,21 @@ Here we will teach you how to setup your bot.
 
 ### Requirements
 - [Rust](https://www.rust-lang.org/) (if you are on NixOS, just run `direnv allow`)
+- [PostgreSQL](https://www.postgresql.org/)
 
 ### Environment Variables
-Create a new `.env` file and inform the values:
+Copy the `.env.example` file to `.env`:
+```
+cp .env.example .env
+```
+
+Open `.env` file and fill these values:
 ```
 DISCORD_TOKEN=
+DATABASE_HOST=
+DATABASE_PORT=
+DATABASE_USER=
+DATABASE_PASSWORD=
 ```
 
 ### Build and Run

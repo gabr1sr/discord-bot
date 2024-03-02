@@ -7,4 +7,7 @@ help = ajuda
      .command = comando
      .command-description = Nome do comando
 
+database = database
+     .description = Executa uma query de testes no banco de dados
+
 Pong = Pong! :ping_pong:
