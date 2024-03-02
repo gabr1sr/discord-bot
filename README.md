@@ -24,10 +24,7 @@ cp .env.example .env
 Open `.env` file and fill these values:
 ```
 DISCORD_TOKEN=
-DATABASE_HOST=
-DATABASE_PORT=
-DATABASE_USER=
-DATABASE_PASSWORD=
+DATABASE_URL=
 ```
 
 ### Build and Run

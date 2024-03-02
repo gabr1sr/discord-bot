@@ -37,12 +37,9 @@ async fn main() {
     dotenv().ok();
 
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
-    let db_host = std::env::var("DATABASE_HOST").expect("missing DATABASE_HOST");
-    let db_port = std::env::var("DATABASE_PORT").expect("missing DATABASE_PORT");
-    let db_user = std::env::var("DATABASE_USER").expect("missing DATABASE_USER");
-    let db_password = std::env::var("DATABASE_PASSWORD").expect("missing DATABASE_PASSWORD");
+    let db_url = std::env::var("DATABASE_URL").expect("missing DATABASE_URL");
 
-    let database = match Database::new(db_host, db_port, db_user, db_password).await {
+    let database = match Database::new(db_url).await {
         Ok(data) => data,
         Err(e) => panic!("database error: {}", e),
     };

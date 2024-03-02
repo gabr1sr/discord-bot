@@ -1,25 +1,20 @@
-use tokio_postgres::{Client, Error, NoTls};
+use sqlx::{
+    Error,
+    postgres::PgPoolOptions, Pool, Postgres
+};
 
 pub struct Database {
-    pub client: Client,
+    pub pool: Pool<Postgres>,
 }
 
 impl Database {
     pub async fn new(
-        host: String,
-        port: String,
-        user: String,
-        password: String,
+        database_url: String
     ) -> Result<Self, Error> {
-        let config = format!("host={host} port={port} user={user} password={password}");
-        let (client, connection) = tokio_postgres::connect(config.as_str(), NoTls).await?;
-
-        tokio::spawn(async move {
-            if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
-            }
-        });
-
-        Ok(Self { client })
+        let pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect(database_url.as_str()).await?;
+        
+        Ok(Self { pool })
     }
 }

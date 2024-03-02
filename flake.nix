@@ -21,6 +21,7 @@
               openssl
               pkg-config
               rust-bin.stable.latest.default
+              sqlx-cli
             ];
           };
         }

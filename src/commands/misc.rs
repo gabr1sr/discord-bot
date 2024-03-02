@@ -11,14 +11,11 @@ pub async fn ping(ctx: Context<'_>) -> Result<(), Error> {
 
 #[poise::command(slash_command, prefix_command, category = "Misc")]
 pub async fn database(ctx: Context<'_>) -> Result<(), Error> {
-    let rows = ctx
-        .data()
-        .database
-        .client
-        .query("SELECT $1::TEXT", &[&"hello world"])
-        .await?;
+    let row: (i64,) = sqlx::query_as("SELECT $1")
+        .bind(150_i64)
+        .fetch_one(&ctx.data().database.pool).await?;
 
-    let value: &str = rows[0].get(0);
-    ctx.reply(value.to_string()).await?;
+    let res = format!("Value: {}", row.0);
+    ctx.reply(res).await?;
     Ok(())
 }
