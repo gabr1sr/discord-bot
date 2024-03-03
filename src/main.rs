@@ -6,8 +6,8 @@ use poise::serenity_prelude as serenity;
 
 pub mod commands;
 pub mod database;
-pub mod translation;
 pub mod models;
+pub mod translation;
 
 use database::Database;
 
@@ -59,7 +59,7 @@ async fn main() {
         .options(poise::FrameworkOptions {
             commands,
             prefix_options: poise::PrefixFrameworkOptions {
-                prefix: Some("!".into()),
+                prefix: Some("ko!".into()),
                 edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
                     Duration::from_secs(3600),
                 ))),
