@@ -13,4 +13,4 @@ poise = "0.6.1"
 serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model"] }
 tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread"] }
 tracing = { version = "0.1.40", features = ["log"] }
-sqlx = { version = "0.7", features = [ "postgres", "runtime-async-std", "tls-rustls" ] }
+sqlx = { version = "0.7", features = [ "postgres", "chrono", "runtime-async-std", "tls-rustls" ] }
