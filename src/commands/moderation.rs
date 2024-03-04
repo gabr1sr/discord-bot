@@ -149,6 +149,8 @@ pub async fn punish(
 
     let infraction = result.unwrap();
 
+    // TODO: author highest role must be lower than target member highest role
+    
     let result = match infraction.punishment {
         Punishment::Ban => ban_users(ctx, guild_id, &mut user_ids, message).await?,
         Punishment::Timeout => {
@@ -163,15 +165,11 @@ pub async fn punish(
         Punishment::Strike => strike_users(ctx, &mut user_ids, message).await?,
     };
 
-    let res = format!("Result: \n{:?}", result);
-    ctx.reply(res).await?;
-    Ok(())
-}
+    // TODO: log punishment to the user infractions table
 
-#[poise::command(prefix_command, slash_command)]
-pub async fn kinash(ctx: Context<'_>, duration: i64) -> Result<(), Error> {
-    let value = to_iso8601(duration);
-    let res = format!("ISO8601 Now + duration = {:?}", value);
+    // TODO: make a better punish coomand response
+    
+    let res = format!("Result: \n{:?}", result);
     ctx.reply(res).await?;
     Ok(())
 }
