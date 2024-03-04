@@ -6,12 +6,12 @@ CREATE TABLE infractions (
        id    	  integer    NOT NULL PRIMARY KEY,
        severity	  severity   NOT NULL,
        punishment punishment NOT NULL,
-       duration	  integer    NOT NULL DEFAULT 0
+       duration	  bigint     NOT NULL DEFAULT 0
 );
 
 CREATE TABLE punishments (
        id    	  serial      PRIMARY KEY,
        user_id	  TEXT	      NOT NULL,
        punishment punishment  NOT NULL,
-       duration	  integer     NOT NULL DEFAULT 0
+       duration	  bigint      NOT NULL DEFAULT 0
 );

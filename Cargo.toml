@@ -10,7 +10,8 @@ dotenv = "0.15.0"
 fluent = "0.16.0"
 intl-memoizer = "0.5.1"
 poise = "0.6.1"
-serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "model"] }
+serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "rustls_backend", "cache", "model"] }
 tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread"] }
 tracing = { version = "0.1.40", features = ["log"] }
 sqlx = { version = "0.7", features = [ "postgres", "chrono", "runtime-async-std", "tls-rustls" ] }
+regex = "1.10.3"

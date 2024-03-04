@@ -21,7 +21,7 @@ pub struct InfractionModel {
     pub id: i32,
     pub severity: Severity,
     pub punishment: Punishment,
-    pub duration: i32,
+    pub duration: i64,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -29,7 +29,7 @@ pub struct PunishmentModel {
     pub id: i32,
     pub user_id: String,
     pub punishment: Punishment,
-    pub duration: i32,
+    pub duration: i64,
 }
 
 #[derive(Debug, sqlx::FromRow)]

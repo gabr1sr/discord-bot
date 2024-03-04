@@ -8,6 +8,7 @@ pub mod commands;
 pub mod database;
 pub mod models;
 pub mod translation;
+pub mod utils;
 
 use database::Database;
 
@@ -50,6 +51,8 @@ async fn main() {
         commands::utility::help(),
         commands::misc::database(),
         commands::moderation::infraction(),
+        commands::moderation::punish(),
+        commands::moderation::kinash(),
     ];
 
     let translations = translation::read_ftl().expect("failed to read translation files");
