@@ -237,26 +237,15 @@ async fn strike_users(
     message: String,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut striked: Vec<UserId> = Vec::new();
-    let mut not_striked: Vec<UserId> = Vec::new();
 
     for user_id in user_ids.iter() {
-        let result = user_id.create_dm_channel(ctx).await;
-
-        if let Err(_) = result {
-            not_striked.push(*user_id);
-            continue;
-        }
-
-        let channel = result.unwrap();
+        let channel = user_id.create_dm_channel(ctx).await.unwrap();
         let res = format!("You received a strike:\n{}", message.clone());
-
-        match channel.say(ctx, res).await {
-            Ok(_) => striked.push(*user_id),
-            Err(_) => not_striked.push(*user_id),
-        };
+        channel.say(ctx, res).await.unwrap();
+        striked.push(*user_id);
     }
 
-    Ok((striked, not_striked))
+    Ok((striked, Vec::new()))
 }
 
 fn format_infraction(
