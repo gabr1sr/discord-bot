@@ -50,7 +50,7 @@ async fn main() {
         commands::misc::ping(),
         commands::utility::help(),
         commands::misc::database(),
-        commands::moderation::infraction(),
+        commands::moderation::infractions(),
         commands::moderation::punish(),
     ];
 

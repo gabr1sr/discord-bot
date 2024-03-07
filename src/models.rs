@@ -1,4 +1,4 @@
-use sqlx::types::chrono::{self, Local};
+use sqlx::types::chrono::{self, Utc};
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, sqlx::Type, poise::ChoiceParameter)]
 #[sqlx(type_name = "severity", rename_all = "lowercase")]
@@ -37,5 +37,5 @@ pub struct UserInfractionModel {
     pub id: i32,
     pub user_id: String,
     pub infraction_id: i32,
-    pub created_at: chrono::DateTime<Local>,
+    pub created_at: Option<chrono::DateTime<Utc>>,
 }

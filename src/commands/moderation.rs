@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use crate::models::{InfractionModel, Punishment, Severity};
+use crate::models::{InfractionModel, Punishment, Severity, UserInfractionModel};
 use crate::utils::user_ids_from;
 use crate::{Context, Error};
 use serenity::all::GuildId;
@@ -12,12 +12,12 @@ use sqlx::types::chrono::{DateTime, NaiveDateTime, Utc};
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("add", "list", "remove"),
+    subcommands("add", "list", "remove", "user"),
     subcommand_required,
     required_permissions = "ADMINISTRATOR",
     category = "Moderation"
 )]
-pub async fn infraction(_: Context<'_>) -> Result<(), Error> {
+pub async fn infractions(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
@@ -128,7 +128,7 @@ pub async fn punish(
     users: String,
     message: String,
 ) -> Result<(), Error> {
-    ctx.defer().await?;
+    ctx.defer_ephemeral().await?;
     let users_str = users.as_str();
     let mut user_ids: Vec<UserId> = user_ids_from(users_str);
 
@@ -149,28 +149,50 @@ pub async fn punish(
 
     let infraction = result.unwrap();
 
-    // TODO: author highest role must be lower than target member highest role
-    
+    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+        ctx.reply("One of the users have a role higher than yours.")
+            .await?;
+        return Ok(());
+    }
+
     let result = match infraction.punishment {
-        Punishment::Ban => ban_users(ctx, guild_id, &mut user_ids, message).await?,
+        Punishment::Ban => ban_users(ctx, guild_id, &mut user_ids, message, infraction.id).await?,
         Punishment::Timeout => {
             timeout_users(
                 ctx,
                 guild_id,
                 &mut user_ids,
                 to_iso8601(infraction.duration),
+                infraction.id,
             )
             .await?
         }
-        Punishment::Strike => strike_users(ctx, &mut user_ids, message).await?,
+        Punishment::Strike => strike_users(ctx, &mut user_ids, message, infraction.id).await?,
     };
 
-    // TODO: log punishment to the user infractions table
-
-    // TODO: make a better punish coomand response
-    
-    let res = format!("Result: \n{:?}", result);
+    let res = punish_response(result);
     ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(ephemeral, slash_command, prefix_command, guild_only)]
+pub async fn user(ctx: Context<'_>, member: UserId) -> Result<(), Error> {
+    let user_id = member.get().to_string();
+
+    if let Ok(user_infractions) = sqlx::query_as!(
+        UserInfractionModel,
+        r#"SELECT * FROM user_infractions WHERE user_id = $1"#,
+        user_id,
+    )
+    .fetch_all(&ctx.data().database.pool)
+    .await
+    {
+        let res = format!("User infractions: {:?}", user_infractions);
+        ctx.reply(res).await?;
+        return Ok(());
+    }
+
+    ctx.reply("User has no infractions!").await?;
     Ok(())
 }
 
@@ -191,6 +213,7 @@ async fn ban_users(
     guild_id: GuildId,
     user_ids: &mut Vec<UserId>,
     message: String,
+    infraction_id: i32,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut banned = Vec::new();
     let mut not_banned = Vec::new();
@@ -203,6 +226,8 @@ async fn ban_users(
             Ok(_) => banned.push(*user_id),
             Err(_) => not_banned.push(*user_id),
         };
+
+        log_punishment(&ctx, user_id, infraction_id).await?;
     }
 
     Ok((banned, not_banned))
@@ -213,6 +238,7 @@ async fn timeout_users(
     guild_id: GuildId,
     user_ids: &mut Vec<UserId>,
     duration: String,
+    infraction_id: i32,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut timedout = Vec::new();
     let mut not_timedout = Vec::new();
@@ -224,6 +250,8 @@ async fn timeout_users(
             Ok(_) => timedout.push(*user_id),
             Err(_) => not_timedout.push(*user_id),
         };
+
+        log_punishment(&ctx, user_id, infraction_id).await?;
     }
 
     Ok((timedout, not_timedout))
@@ -233,6 +261,7 @@ async fn strike_users(
     ctx: Context<'_>,
     user_ids: &mut Vec<UserId>,
     message: String,
+    infraction_id: i32,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut striked: Vec<UserId> = Vec::new();
 
@@ -241,9 +270,70 @@ async fn strike_users(
         let res = format!("You received a strike:\n{}", message.clone());
         channel.say(ctx, res).await.unwrap();
         striked.push(*user_id);
+        log_punishment(&ctx, user_id, infraction_id).await?;
     }
 
     Ok((striked, Vec::new()))
+}
+
+async fn assert_highest_role(ctx: &Context<'_>, user_ids: &mut Vec<UserId>) -> Result<bool, Error> {
+    let author_member = ctx.author_member().await.unwrap();
+    let (_, author_role_position) = author_member.highest_role_info(ctx).unwrap();
+
+    let guild_id = ctx.guild_id().unwrap();
+
+    for user_id in user_ids.iter() {
+        let member = guild_id.member(ctx, user_id).await.unwrap();
+        let (_, member_role_position) = member.highest_role_info(ctx).unwrap();
+
+        if member_role_position >= author_role_position {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
+}
+
+async fn log_punishment(
+    ctx: &Context<'_>,
+    user_id: &UserId,
+    infraction_id: i32,
+) -> Result<(), Error> {
+    let user_infraction = sqlx::query_as!(
+        UserInfractionModel,
+        r#"INSERT INTO user_infractions (user_id, infraction_id) VALUES ($1, $2) RETURNING id, user_id, infraction_id, created_at"#,
+        user_id.get().to_string(),
+        infraction_id,
+    )
+        .fetch_one(&ctx.data().database.pool)
+        .await
+        .unwrap();
+
+    println!("{:?}", user_infraction);
+
+    Ok(())
+}
+
+fn punish_response((punished_users, not_punished_users): (Vec<UserId>, Vec<UserId>)) -> String {
+    let punished_mentions = user_ids_to_mentions(punished_users);
+    let not_punished_mentions = user_ids_to_mentions(not_punished_users);
+
+    format!(
+        "Punished users: {}\nNot punished users: {}",
+        punished_mentions.join(", "),
+        not_punished_mentions.join(", ")
+    )
+}
+
+fn user_ids_to_mentions(user_ids: Vec<UserId>) -> Vec<String> {
+    let raw_ids = user_ids.iter().map(|u| u.get());
+    let mut mentions = Vec::new();
+
+    for id in raw_ids {
+        mentions.push(format!("<@{id}>"));
+    }
+
+    mentions
 }
 
 fn format_infraction(
