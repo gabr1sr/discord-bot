@@ -5,10 +5,16 @@ use dotenv::dotenv;
 use poise::serenity_prelude as serenity;
 
 pub mod commands;
+pub mod database;
+pub mod models;
 pub mod translation;
+pub mod utils;
+
+use database::Database;
 
 pub struct Data {
     translations: translation::Translations,
+    database: Database,
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -31,12 +37,23 @@ async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
 #[tokio::main]
 async fn main() {
     dotenv().ok();
+
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let db_url = std::env::var("DATABASE_URL").expect("missing DATABASE_URL");
+
+    let database = Database::new(db_url).await.unwrap();
 
     let intents =
         serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
 
-    let mut commands = vec![commands::misc::ping(), commands::utility::help()];
+    let mut commands = vec![
+        commands::misc::ping(),
+        commands::utility::help(),
+        commands::misc::database(),
+        commands::moderation::infractions(),
+        commands::moderation::punish(),
+    ];
+
     let translations = translation::read_ftl().expect("failed to read translation files");
     translation::apply_translations(&translations, &mut commands);
 
@@ -44,7 +61,7 @@ async fn main() {
         .options(poise::FrameworkOptions {
             commands,
             prefix_options: poise::PrefixFrameworkOptions {
-                prefix: Some("!".into()),
+                prefix: Some("ko!".into()),
                 edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
                     Duration::from_secs(3600),
                 ))),
@@ -78,7 +95,10 @@ async fn main() {
             Box::pin(async move {
                 println!("Logged in as {}", ready.user.name);
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data { translations })
+                Ok(Data {
+                    translations,
+                    database,
+                })
             })
         })
         .build();
