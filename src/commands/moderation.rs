@@ -35,6 +35,7 @@ pub async fn add(
     punishment: Punishment,
     duration: i64,
 ) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
     if let Ok(_) = sqlx::query_as!(
         InfractionModel,
         r#"SELECT id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration FROM infractions WHERE id = $1"#,
@@ -73,6 +74,7 @@ pub async fn add(
     guild_only
 )]
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
     let result = sqlx::query_as!(
         InfractionModel,
         r#"SELECT id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration FROM infractions ORDER BY id"#,
@@ -107,6 +109,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     guild_only
 )]
 pub async fn remove(ctx: Context<'_>, id: i32) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
     let result: PgQueryResult = sqlx::query!("DELETE FROM infractions WHERE id = $1", id)
         .execute(&ctx.data().database.pool)
         .await
@@ -121,7 +124,14 @@ pub async fn remove(ctx: Context<'_>, id: i32) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(ephemeral, slash_command, prefix_command, guild_only)]
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    guild_only,
+    required_permissions = "KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS",
+    category = "Moderation"
+)]
 pub async fn punish(
     ctx: Context<'_>,
     id: i32,
@@ -175,8 +185,15 @@ pub async fn punish(
     Ok(())
 }
 
-#[poise::command(ephemeral, slash_command, prefix_command, guild_only)]
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    guild_only,
+    required_permissions = "KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS"
+)]
 pub async fn user(ctx: Context<'_>, member: UserId) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
     let user_id = member.get().to_string();
 
     if let Ok(user_infractions) = sqlx::query_as!(
@@ -187,8 +204,16 @@ pub async fn user(ctx: Context<'_>, member: UserId) -> Result<(), Error> {
     .fetch_all(&ctx.data().database.pool)
     .await
     {
-        let res = format!("User infractions: {:?}", user_infractions);
-        ctx.reply(res).await?;
+        let mut infractions_str = String::new();
+
+        for infraction in user_infractions {
+            let formatted = format_user_infraction(infraction);
+            infractions_str.push_str(formatted.as_str());
+        }
+
+        let vec_pages: Vec<&str> = infractions_str.split("\r\n").collect();
+        let pages: &[&str] = vec_pages.as_slice();
+        poise::samples::paginate(ctx, pages).await?;
         return Ok(());
     }
 
@@ -347,5 +372,19 @@ fn format_infraction(
     format!(
         "ID: {}\nSeverity: {:?}\nPunishment: {:?}\nDuration: {}\r\n",
         id, severity, punishment, duration
+    )
+}
+
+fn format_user_infraction(
+    UserInfractionModel {
+        id,
+        user_id,
+        infraction_id,
+        created_at,
+    }: UserInfractionModel,
+) -> String {
+    format!(
+        "<@{}> Case ID: {}\nInfraction ID: {}\nCreated at: {:?}\r\n",
+        user_id, id, infraction_id, created_at
     )
 }
