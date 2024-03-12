@@ -56,6 +56,7 @@ async fn main() {
         commands::moderation::timeout(),
         commands::moderation::ban(),
         commands::moderation::unban(),
+        commands::moderation::untimeout(),
     ];
 
     let translations = translation::read_ftl().expect("failed to read translation files");

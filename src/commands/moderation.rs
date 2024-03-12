@@ -89,6 +89,32 @@ pub async fn timeout(
     slash_command,
     prefix_command,
     guild_only,
+    required_permissions = "MODERATE_MEMBERS",
+    category = "Moderation"
+)]
+pub async fn untimeout(ctx: Context<'_>, users: String) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    let users_str = users.as_str();
+    let mut user_ids: Vec<UserId> = user_ids_from(users_str);
+    let guild_id = ctx.guild_id().unwrap();
+
+    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+        ctx.reply("One of the users have a role higher than yours.")
+            .await?;
+        return Ok(());
+    }
+
+    let result = untimeout_users(ctx, guild_id, &mut user_ids).await?;
+    let res = unpunish_response(result);
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    guild_only,
     required_permissions = "BAN_MEMBERS",
     category = "Moderation"
 )]
@@ -285,6 +311,26 @@ async fn unban_users(
     }
 
     Ok((unbanned, not_unbanned))
+}
+
+async fn untimeout_users(
+    ctx: Context<'_>,
+    guild_id: GuildId,
+    user_ids: &mut Vec<UserId>,
+) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
+    let mut untimedout = Vec::new();
+    let mut not_untimedout = Vec::new();
+
+    for user_id in user_ids.iter() {
+        let builder = EditMember::new().enable_communication();
+
+        match guild_id.edit_member(&ctx, *user_id, builder).await {
+            Ok(_) => untimedout.push(*user_id),
+            Err(_) => not_untimedout.push(*user_id),
+        };
+    }
+
+    Ok((untimedout, not_untimedout))
 }
 
 async fn timeout_users_punishment(
