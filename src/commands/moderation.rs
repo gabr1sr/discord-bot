@@ -13,6 +13,36 @@ use sqlx::types::chrono::{DateTime, NaiveDateTime, Utc};
     slash_command,
     prefix_command,
     guild_only,
+    required_permissions = "KICK_MEMBERS",
+    category = "Moderation"
+)]
+pub async fn kick(
+    ctx: Context<'_>,
+    users: String,
+    reason: String,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    let users_str = users.as_str();
+    let mut user_ids: Vec<UserId> = user_ids_from(users_str);
+    let guild_id = ctx.guild_id().unwrap();
+
+    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+        ctx.reply("One of the users have a role higher than yours.")
+            .await?;
+        return Ok(());
+    }
+
+    let result = kick_users(ctx, guild_id, &mut user_ids, reason).await?;
+    let res = punish_response(result);
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    guild_only,
     required_permissions = "KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS",
     category = "Moderation"
 )]
@@ -79,6 +109,27 @@ fn to_iso8601(duration: i64) -> String {
     let datetime: DateTime<Utc> = DateTime::from_naive_utc_and_offset(naive_datetime, Utc);
 
     datetime.to_rfc3339()
+}
+
+async fn kick_users(
+    ctx: Context<'_>,
+    guild_id: GuildId,
+    user_ids: &mut Vec<UserId>,
+    reason: String,
+) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
+    let mut kicked = Vec::new();
+    let mut not_kicked = Vec::new();
+
+    for user_id in user_ids.iter() {
+        match guild_id
+            .kick_with_reason(&ctx, user_id, reason.as_str())
+            .await {
+            Ok(_) => kicked.push(*user_id),
+            Err(_) => not_kicked.push(*user_id),
+        };
+    }
+
+    Ok((kicked, not_kicked))
 }
 
 async fn ban_users(
