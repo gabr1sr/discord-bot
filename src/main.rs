@@ -50,8 +50,14 @@ async fn main() {
         commands::misc::ping(),
         commands::utility::help(),
         commands::misc::database(),
-        commands::moderation::infractions(),
+        commands::infractions::infractions(),
         commands::moderation::punish(),
+        commands::moderation::kick(),
+        commands::moderation::timeout(),
+        commands::moderation::ban(),
+        commands::moderation::unban(),
+        commands::moderation::untimeout(),
+        commands::moderation::strike(),
     ];
 
     let translations = translation::read_ftl().expect("failed to read translation files");
