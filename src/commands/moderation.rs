@@ -160,6 +160,31 @@ pub async fn unban(ctx: Context<'_>, users: String) -> Result<(), Error> {
     slash_command,
     prefix_command,
     guild_only,
+    required_permissions = "MODERATE_MEMBERS",
+    category = "Moderation"
+)]
+pub async fn strike(ctx: Context<'_>, users: String, reason: String) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    let users_str = users.as_str();
+    let mut user_ids: Vec<UserId> = user_ids_from(users_str);
+
+    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+        ctx.reply("One of the users have a role higher than yours.")
+            .await?;
+        return Ok(());
+    }
+
+    let result = strike_users_punishment(ctx, &mut user_ids, reason).await?;
+    let res = punish_response(result);
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    guild_only,
     required_permissions = "KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS",
     category = "Moderation"
 )]
@@ -368,7 +393,7 @@ async fn strike_users_punishment(
     for user_id in user_ids.iter() {
         let channel = user_id.create_dm_channel(ctx).await.unwrap();
         let res = format!("You received a strike:\n{}", message.clone());
-        channel.say(ctx, res).await.unwrap();
+        channel.say(ctx, res).await?;
         striked.push(*user_id);
         log_punishment(&ctx, user_id, Punishment::Strike, 0).await?;
     }
@@ -464,7 +489,7 @@ async fn strike_users_infraction(
     for user_id in user_ids.iter() {
         let channel = user_id.create_dm_channel(ctx).await.unwrap();
         let res = format!("You received a strike:\n{}", message.clone());
-        channel.say(ctx, res).await.unwrap();
+        channel.say(ctx, res).await?;
         striked.push(*user_id);
         log_user_infraction(&ctx, user_id, infraction_id).await?;
     }
