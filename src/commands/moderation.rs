@@ -89,6 +89,32 @@ pub async fn timeout(
     slash_command,
     prefix_command,
     guild_only,
+    required_permissions = "BAN_MEMBERS",
+    category = "Moderation"
+)]
+pub async fn ban(ctx: Context<'_>, users: String, reason: String) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    let users_str = users.as_str();
+    let mut user_ids: Vec<UserId> = user_ids_from(users_str);
+    let guild_id = ctx.guild_id().unwrap();
+
+    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+        ctx.reply("One of the users have a role higher than yours.")
+            .await?;
+        return Ok(());
+    }
+
+    let result = ban_users_punishment(ctx, guild_id, &mut user_ids, reason).await?;
+    let res = punish_response(result);
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    guild_only,
     required_permissions = "KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS",
     category = "Moderation"
 )]
