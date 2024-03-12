@@ -14,6 +14,7 @@ pub enum Punishment {
     Strike,
     Timeout,
     Ban,
+    Kick,
 }
 
 #[derive(Debug, sqlx::FromRow)]

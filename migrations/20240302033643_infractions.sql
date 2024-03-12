@@ -1,6 +1,6 @@
 CREATE TYPE severity AS ENUM ('low', 'mid', 'high');
 
-CREATE TYPE punishment AS ENUM ('strike', 'timeout', 'ban');
+CREATE TYPE punishment AS ENUM ('strike', 'timeout', 'ban', 'kick');
 
 CREATE TABLE infractions (
        id    	  integer    NOT NULL PRIMARY KEY,
