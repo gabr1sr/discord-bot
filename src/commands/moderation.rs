@@ -115,6 +115,25 @@ pub async fn ban(ctx: Context<'_>, users: String, reason: String) -> Result<(), 
     slash_command,
     prefix_command,
     guild_only,
+    required_permissions = "BAN_MEMBERS",
+    category = "Moderation"
+)]
+pub async fn unban(ctx: Context<'_>, users: String) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    let users_str = users.as_str();
+    let mut user_ids: Vec<UserId> = user_ids_from(users_str);
+    let guild_id = ctx.guild_id().unwrap();
+    let result = unban_users(ctx, guild_id, &mut user_ids).await?;
+    let res = unpunish_response(result);
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    guild_only,
     required_permissions = "KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS",
     category = "Moderation"
 )]
@@ -248,6 +267,24 @@ async fn ban_users_punishment(
     }
 
     Ok((banned, not_banned))
+}
+
+async fn unban_users(
+    ctx: Context<'_>,
+    guild_id: GuildId,
+    user_ids: &mut Vec<UserId>,
+) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
+    let mut unbanned = Vec::new();
+    let mut not_unbanned = Vec::new();
+
+    for user_id in user_ids.iter() {
+        match guild_id.unban(&ctx, user_id).await {
+            Ok(_) => unbanned.push(*user_id),
+            Err(_) => not_unbanned.push(*user_id),
+        };
+    }
+
+    Ok((unbanned, not_unbanned))
 }
 
 async fn timeout_users_punishment(
@@ -456,6 +493,19 @@ fn punish_response((punished_users, not_punished_users): (Vec<UserId>, Vec<UserI
         "Punished users: {}\nNot punished users: {}",
         punished_mentions.join(", "),
         not_punished_mentions.join(", ")
+    )
+}
+
+fn unpunish_response(
+    (unpunished_users, not_unpunished_users): (Vec<UserId>, Vec<UserId>),
+) -> String {
+    let unpunished_mentions = user_ids_to_mentions(unpunished_users);
+    let not_unpunished_mentions = user_ids_to_mentions(not_unpunished_users);
+
+    format!(
+        "Unpunished users: {}\nNot unpunished users: {}",
+        unpunished_mentions.join(", "),
+        not_unpunished_mentions.join(", ")
     )
 }
 
