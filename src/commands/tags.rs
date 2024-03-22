@@ -68,25 +68,21 @@ pub async fn edit(
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
-    match sqlx::query_as!(
-        TagModel,
-        r#"UPDATE tags SET content = $1 WHERE user_id = $2 AND name = $3 RETURNING id, user_id, name, content"#,
-        content,
-        ctx.author().id.to_string(),
-        name
-    )
-        .fetch_one(&ctx.data().database.pool)
-        .await {
-            Err(_) => {
-                let res = format!("Tag `{name}` doesn't exists or you're not the owner of this tag!");
-                ctx.reply(res).await?;
-            },
-            Ok(tag) => {
-                let res = format!("Content of the tag `{}` updated successfully!", tag.name);
-                ctx.reply(res).await?;
-            }
-        }
-    
+    let res =
+        match sqlx::query_as!(
+            TagModel,
+            r#"UPDATE tags SET content = $1 WHERE user_id = $2 AND name = $3 RETURNING id, user_id, name, content"#,
+            content,
+            ctx.author().id.to_string(),
+            name
+        )
+            .fetch_one(&ctx.data().database.pool)
+            .await {
+                Err(_) => format!("Tag `{name}` doesn't exists or you're not the owner of this tag!"),
+                Ok(tag) => format!("Content of the tag `{}` updated successfully!", tag.name),
+            };
+
+    ctx.reply(res).await?;
     Ok(())
 }
 
