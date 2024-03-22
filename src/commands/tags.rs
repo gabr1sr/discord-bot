@@ -4,7 +4,7 @@ use crate::models::TagModel;
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("add", "edit", "see"),
+    subcommands("add", "edit", "see", "list"),
     subcommand_required,
     category = "Tags")]
 pub async fn tag(_: Context<'_>) -> Result<(), Error> {
@@ -111,4 +111,34 @@ pub async fn see(
 
     ctx.reply(res).await?;
     Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    guild_only
+)]
+pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let res =
+        match sqlx::query_as!(
+            TagModel,
+            r#"SELECT * FROM tags"#
+        )
+            .fetch_all(&ctx.data().database.pool)
+            .await {
+                Err(_) => format!("Server has no tags!"),
+                Ok(tags) => parse_tag_names(&tags),
+            };
+
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+fn parse_tag_names(tags: &[TagModel]) -> String {
+    let mut names = Vec::new();
+    names.extend(tags.iter().map(|t| format!("- {}", t.name)));
+    names.join("\n")
 }
