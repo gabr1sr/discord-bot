@@ -42,7 +42,7 @@ pub struct UserInfractionModel {
 }
 
 #[derive(Debug, sqlx::FromRow)]
-pub struct TagsModel {
+pub struct TagModel {
     pub id: i32,
     pub user_id: String,
     pub name: String,
