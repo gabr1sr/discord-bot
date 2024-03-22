@@ -4,7 +4,7 @@ use crate::models::TagModel;
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("add"),
+    subcommands("add", "edit"),
     subcommand_required,
     category = "Tags")]
 pub async fn tag(_: Context<'_>) -> Result<(), Error> {
@@ -52,5 +52,40 @@ pub async fn add(
 
     let res = format!("Cannot create tag {name}!");
     ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    guild_only
+)]
+pub async fn edit(
+    ctx: Context<'_>,
+    name: String,
+    content: String,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    match sqlx::query_as!(
+        TagModel,
+        r#"UPDATE tags SET content = $1 WHERE user_id = $2 AND name = $3 RETURNING id, user_id, name, content"#,
+        content,
+        ctx.author().id.to_string(),
+        name
+    )
+        .fetch_one(&ctx.data().database.pool)
+        .await {
+            Err(_) => {
+                let res = format!("Tag `{name}` doesn't exists or you're not the owner of this tag!");
+                ctx.reply(res).await?;
+            },
+            Ok(tag) => {
+                let res = format!("Content of the tag `{}` updated successfully!", tag.name);
+                ctx.reply(res).await?;
+            }
+        }
+    
     Ok(())
 }
