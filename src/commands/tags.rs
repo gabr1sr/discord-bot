@@ -100,13 +100,13 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 fn parse_tag_names(tags: &[TagModel]) -> String {
+    if tags.is_empty() {
+        return "No tags!".to_string();
+    }
+    
     let mut names = Vec::new();
     names.extend(tags.iter().map(|t| format!("- {}", t.name)));
-    if names.is_empty() {
-        "No tags!".to_string()
-    } else {
-        names.join("\n")
-    }
+    names.join("\n")
 }
 
 #[poise::command(ephemeral, slash_command, prefix_command, guild_only)]
