@@ -159,7 +159,7 @@ pub fn apply_translations(
                             bundle,
                             &command.name,
                             Some(&format!("{}-{}", parameter.name, choice.name)),
-                            None
+                            None,
                         )
                         .unwrap(),
                     );
@@ -192,7 +192,7 @@ pub fn apply_translations(
                 .unwrap(),
             );
         }
-        
+
         for parameter in &mut command.parameters {
             // Set fallback parameter name and description to en-US
             parameter.name = format(bundle, &command.name, Some(&parameter.name), None).unwrap();
