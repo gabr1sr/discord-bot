@@ -1,10 +1,11 @@
 use crate::{Context, Error};
 use crate::models::TagModel;
+use serenity::model::user::User;
 
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("add", "edit", "see", "list"),
+    subcommands("add", "edit", "see", "list", "user"),
     subcommand_required,
     category = "Tags")]
 pub async fn tag(_: Context<'_>) -> Result<(), Error> {
@@ -140,5 +141,33 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 fn parse_tag_names(tags: &[TagModel]) -> String {
     let mut names = Vec::new();
     names.extend(tags.iter().map(|t| format!("- {}", t.name)));
-    names.join("\n")
+    if names.is_empty() { "No tags!".to_string() } else { names.join("\n") }
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    guild_only
+)]
+pub async fn user(
+    ctx: Context<'_>,
+    user: User,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let res =
+        match sqlx::query_as!(
+            TagModel,
+            r#"SELECT * FROM tags WHERE user_id = $1"#,
+            user.id.to_string(),
+        )
+            .fetch_all(&ctx.data().database.pool)
+            .await {
+                Err(_) => format!("User has no tags!"),
+                Ok(tags) => parse_tag_names(&tags),
+            };
+
+    ctx.reply(res).await?;
+    Ok(())
 }
