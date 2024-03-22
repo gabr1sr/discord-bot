@@ -4,7 +4,7 @@ use crate::models::TagModel;
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("add", "edit"),
+    subcommands("add", "edit", "see"),
     subcommand_required,
     category = "Tags")]
 pub async fn tag(_: Context<'_>) -> Result<(), Error> {
@@ -87,5 +87,32 @@ pub async fn edit(
             }
         }
     
+    Ok(())
+}
+
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only
+)]
+pub async fn see(
+    ctx: Context<'_>,
+    name: String,
+) -> Result<(), Error> {
+    ctx.defer().await?;
+
+    let res =
+        match sqlx::query_as!(
+            TagModel,
+            r#"SELECT * FROM tags WHERE name = $1"#,
+            name
+        )
+            .fetch_one(&ctx.data().database.pool)
+            .await {
+                Err(_) => format!("Tag `{name}` doesn't exists!"),
+                Ok(tag) => tag.content,
+            };
+
+    ctx.reply(res).await?;
     Ok(())
 }
