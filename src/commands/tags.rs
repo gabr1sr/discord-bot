@@ -103,7 +103,7 @@ fn parse_tag_names(tags: &[TagModel]) -> String {
     if tags.is_empty() {
         return "No tags!".to_string();
     }
-    
+
     let mut names = Vec::new();
     names.extend(tags.iter().map(|t| format!("- {}", t.name)));
     names.join("\n")
