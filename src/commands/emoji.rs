@@ -6,7 +6,7 @@ use serenity::builder::CreateAttachment;
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("see", "add"),
+    subcommands("see", "add", "list"),
     subcommand_required,
     category = "Emoji"
 )]
@@ -46,4 +46,35 @@ pub async fn add(ctx: Context<'_>, name: String, attachment: Attachment) -> Resu
 
     ctx.reply(res).await?;
     Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    guild_only
+)]
+pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let guild_id = ctx.guild_id().unwrap();
+
+    let res =
+        match guild_id.emojis(&ctx).await {
+            Err(_) => format!("Failed to retrieve server emojis!"),
+            Ok(emojis) => parse_emojis_list(&emojis),
+        };
+
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+fn parse_emojis_list(emojis: &[Emoji]) -> String {
+    if emojis.is_empty() {
+        return "No emojis!".to_string();
+    }
+
+    let mut lines = Vec::new();
+    lines.extend(emojis.iter().map(|e| format!("- <:{}:{}> `{}`", e.name, e.id.get().to_string(), e.name)));
+    lines.join("\n")
 }
