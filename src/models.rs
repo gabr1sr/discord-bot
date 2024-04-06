@@ -40,3 +40,11 @@ pub struct UserInfractionModel {
     pub infraction_id: i32,
     pub created_at: Option<chrono::DateTime<Utc>>,
 }
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct TagModel {
+    pub id: i32,
+    pub user_id: String,
+    pub name: String,
+    pub content: String,
+}
