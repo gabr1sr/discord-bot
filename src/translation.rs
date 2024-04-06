@@ -132,6 +132,49 @@ pub fn apply_translations(
                     )
                     .unwrap(),
                 );
+
+                for parameter in &mut subcommand.parameters {
+                    parameter.name_localizations.insert(
+                        locale.clone(),
+                        format(
+                            bundle,
+                            &command.name,
+                            Some(&format!("{}-{}", subcommand.name, parameter.name)),
+                            None,
+                        )
+                        .unwrap(),
+                    );
+
+                    parameter.description_localizations.insert(
+                        locale.clone(),
+                        format(
+                            bundle,
+                            &command.name,
+                            Some(&format!(
+                                "{}-{}-description",
+                                subcommand.name, parameter.name
+                            )),
+                            None,
+                        )
+                        .unwrap(),
+                    );
+
+                    for choice in &mut parameter.choices {
+                        choice.localizations.insert(
+                            locale.clone(),
+                            format(
+                                bundle,
+                                &command.name,
+                                Some(&format!(
+                                    "{}-{}-{}",
+                                    subcommand.name, parameter.name, choice.name
+                                )),
+                                None,
+                            )
+                            .unwrap(),
+                        );
+                    }
+                }
             }
 
             for parameter in &mut command.parameters {
@@ -191,6 +234,42 @@ pub fn apply_translations(
                 )
                 .unwrap(),
             );
+
+            for parameter in &mut subcommand.parameters {
+                parameter.name = format(
+                    bundle,
+                    &command.name,
+                    Some(&format!("{}-{}", subcommand.name, parameter.name)),
+                    None,
+                )
+                .unwrap();
+
+                parameter.description = Some(
+                    format(
+                        bundle,
+                        &command.name,
+                        Some(&format!(
+                            "{}-{}-description",
+                            subcommand.name, parameter.name
+                        )),
+                        None,
+                    )
+                    .unwrap(),
+                );
+
+                for choice in &mut parameter.choices {
+                    choice.name = format(
+                        bundle,
+                        &command.name,
+                        Some(&format!(
+                            "{}-{}-{}",
+                            subcommand.name, parameter.name, choice.name
+                        )),
+                        None,
+                    )
+                    .unwrap();
+                }
+            }
         }
 
         for parameter in &mut command.parameters {
