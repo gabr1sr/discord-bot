@@ -1,3 +1,4 @@
+pub mod bang;
 pub mod emoji;
 pub mod infractions;
 pub mod misc;

@@ -11,14 +11,19 @@ pub mod translation;
 pub mod utils;
 
 use database::Database;
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+
+type Error = Box<dyn std::error::Error + Send + Sync>;
+type Context<'a> = poise::Context<'a, Data, Error>;
 
 pub struct Data {
     translations: translation::Translations,
     database: Database,
+    bang_channel: Arc<Mutex<u64>>,
+    bang_available: Arc<Mutex<bool>>,
+    bang_handles: Arc<Mutex<Vec<JoinHandle<Result<(), Error>>>>>,
 }
-
-type Error = Box<dyn std::error::Error + Send + Sync>;
-type Context<'a> = poise::Context<'a, Data, Error>;
 
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     match error {
@@ -60,6 +65,9 @@ async fn main() {
         commands::moderation::strike(),
         commands::tags::tag(),
         commands::emoji::emoji(),
+        commands::bang::startbang(),
+        commands::bang::bang(),
+        commands::bang::stopbang(),
     ];
 
     let translations = translation::read_ftl().expect("failed to read translation files");
@@ -106,6 +114,9 @@ async fn main() {
                 Ok(Data {
                     translations,
                     database,
+                    bang_channel: Arc::new(Mutex::new(0)),
+                    bang_available: Arc::new(Mutex::new(false)),
+                    bang_handles: Arc::new(Mutex::new(Vec::new())),
                 })
             })
         })
