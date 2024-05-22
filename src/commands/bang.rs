@@ -1,4 +1,5 @@
 use crate::{Context, Error};
+use rand::seq::SliceRandom;
 use serenity::all::{ChannelId, Http};
 use serenity::json::json;
 use std::sync::Arc;
@@ -30,7 +31,18 @@ async fn generate_bang(
     let token = std::env::var("DISCORD_TOKEN").unwrap();
     let http = Http::new(&token);
 
-    let map = json!({ "content": ":duck: A wild duck appeared!" });
+    // TODO: different bang animals give different amount of points
+
+    let animals = vec![
+        ":duck: A wild duck appeared!",
+        ":boar: A wild boar appeared!",
+        ":deer: A wild deer appeared!",
+        ":rabbit: A wild rabbit appeared!",
+    ];
+
+    let animal = animals.choose(&mut rand::thread_rng());
+
+    let map = json!({ "content": animal });
     http.send_message(channel_id, vec![], &map).await?;
 
     let mut is_bang_available = bang_available.lock().await;
@@ -51,6 +63,8 @@ pub async fn bang(ctx: Context<'_>) -> Result<(), Error> {
         let arc_bang_available = Arc::clone(&ctx.data().bang_available);
         handles.push(tokio::spawn(generate_bang(channel_id, arc_bang_available)));
 
+        // TODO: bang points system using database (guild only)
+
         format!("Nice shot!")
     } else {
         format!("Bang isn't available yet!")
@@ -65,6 +79,8 @@ pub async fn bang(ctx: Context<'_>) -> Result<(), Error> {
 pub async fn stopbang(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;
     let mut handles = ctx.data().bang_handles.lock().await;
+
+    // TODO: find a more efficient way to manage handles
 
     while let Some(handle) = handles.pop() {
         if handle.is_finished() {
