@@ -1,5 +1,6 @@
 use crate::{Context, Error};
 use rand::seq::SliceRandom;
+use rand::Rng;
 use serenity::all::{ChannelId, Http};
 use serenity::json::json;
 use std::sync::Arc;
@@ -26,12 +27,16 @@ async fn generate_bang(
     channel_id: ChannelId,
     bang_available: Arc<Mutex<bool>>,
 ) -> Result<(), Error> {
-    tokio::time::sleep(Duration::from_secs(15)).await;
+    let interval: u64 = {
+        let min_interval = 300; // 5 minute
+        let max_interval = 1200; // 20 minutes
+        rand::thread_rng().gen_range(min_interval..max_interval)
+    };
+    
+    tokio::time::sleep(Duration::from_secs(interval)).await;
 
     let token = std::env::var("DISCORD_TOKEN").unwrap();
     let http = Http::new(&token);
-
-    // TODO: different bang animals give different amount of points
 
     let animals = vec![
         ":duck: A wild duck appeared!",
@@ -62,8 +67,6 @@ pub async fn bang(ctx: Context<'_>) -> Result<(), Error> {
         let channel_id = ctx.channel_id();
         let arc_bang_available = Arc::clone(&ctx.data().bang_available);
         handles.push(tokio::spawn(generate_bang(channel_id, arc_bang_available)));
-
-        // TODO: bang points system using database (guild only)
 
         format!("Nice shot!")
     } else {
