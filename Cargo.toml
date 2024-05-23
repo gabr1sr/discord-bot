@@ -15,3 +15,4 @@ tokio = { version = "1.35.1", features = ["macros", "rt-multi-thread"] }
 tracing = { version = "0.1.40", features = ["log"] }
 sqlx = { version = "0.7", features = [ "postgres", "chrono", "runtime-async-std", "tls-rustls" ] }
 regex = "1.10.3"
+rand = "0.8.5"
