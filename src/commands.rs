@@ -1,3 +1,4 @@
+pub mod animal;
 pub mod bang;
 pub mod emoji;
 pub mod infractions;
