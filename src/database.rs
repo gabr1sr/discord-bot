@@ -1,4 +1,6 @@
-use crate::models::{AnimalModel, BangPointModel};
+use crate::models::{
+    AnimalModel, BangPointModel, InfractionModel, Punishment, PunishmentModel, UserInfractionModel, Severity
+};
 use sqlx::{
     postgres::{PgPoolOptions, PgQueryResult},
     Error, Pool, Postgres,
@@ -116,5 +118,47 @@ impl Database {
         }
 
         self.create_user_bang_points(user_id, points).await
+    }
+
+    pub async fn log_user_punishment(
+        &self,
+        user_id: String,
+        punishment: Punishment,
+        duration: i64,
+    ) -> Result<PunishmentModel, Error> {
+        sqlx::query_as!(
+            PunishmentModel,
+            r#"INSERT INTO punishments (user_id, punishment, duration) VALUES ($1, $2, $3) RETURNING id, user_id, punishment AS "punishment!: Punishment", duration"#,
+            user_id,
+            punishment as Punishment,
+            duration
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    pub async fn log_user_infraction(
+        &self,
+        user_id: String,
+        infraction_id: i32,
+    ) -> Result<UserInfractionModel, Error> {
+        sqlx::query_as!(
+            UserInfractionModel,
+            r#"INSERT INTO user_infractions (user_id, infraction_id) VALUES ($1, $2) RETURNING id, user_id, infraction_id, created_at"#,
+            user_id,
+            infraction_id
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    pub async fn get_infraction(&self, id: i32) -> Result<InfractionModel, Error> {
+        sqlx::query_as!(
+            InfractionModel,
+            r#"SELECT id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration FROM infractions WHERE id = $1"#,
+            id
+        )
+            .fetch_one(&self.pool)
+            .await
     }
 }
