@@ -3,7 +3,7 @@ use crate::{Context, Error};
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("add", "see"),
+    subcommands("add", "see", "remove"),
     subcommand_required,
     category = "Bang"
 )]
@@ -57,6 +57,32 @@ pub async fn see(ctx: Context<'_>, animal: String) -> Result<(), Error> {
     }
 
     ctx.reply(format!("Failed to retrieve animal `{animal}`!"))
+        .await?;
+    Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    required_permissions = "MANAGE_GUILD",
+    guild_only
+)]
+pub async fn remove(ctx: Context<'_>, animal: String) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    if let Ok(result) = ctx.data().database.remove_animal(&animal).await {
+        let res = match result.rows_affected() {
+            1 => "Animal removed successfully!".to_owned(),
+            0 => "No animal removed!".to_owned(),
+            _ => "Animals removed successfully!".to_owned(),
+        };
+
+        ctx.reply(res).await?;
+        return Ok(());
+    }
+
+    ctx.reply(format!("Failed to remove animal: `{animal}`"))
         .await?;
     Ok(())
 }
