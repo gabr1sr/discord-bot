@@ -1,4 +1,5 @@
-use sqlx::{postgres::PgPoolOptions, Error, Pool, Postgres};
+use sqlx::{postgres::{PgPoolOptions, PgQueryResult}, Error, Pool, Postgres};
+use crate::models::AnimalModel;
 
 pub struct Database {
     pub pool: Pool<Postgres>,
@@ -12,5 +13,42 @@ impl Database {
             .await?;
 
         Ok(Self { pool })
+    }
+
+    pub async fn add_animal(&self, animal: &str, emoji: &str, points: i32) -> Result<AnimalModel, Error> {
+        sqlx::query_as!(
+            AnimalModel,
+            r#"INSERT INTO animals (animal, emoji, points) VALUES ($1, $2, $3) RETURNING id, animal, emoji, points"#,
+            animal,
+            emoji,
+            points
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    pub async fn remove_animal(&self, animal: &str) -> Result<PgQueryResult, Error> {
+        sqlx::query!("DELETE FROM animals WHERE animal = $1", animal)
+            .execute(&self.pool)
+            .await
+    }
+
+    pub async fn get_animal(&self, animal: &str) -> Result<AnimalModel, Error> {
+        sqlx::query_as!(
+            AnimalModel,
+            r#"SELECT * FROM animals WHERE animal = $1"#,
+            animal
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    pub async fn get_animals(&self) -> Result<Vec<AnimalModel>, Error> {
+        sqlx::query_as!(
+            AnimalModel,
+            r#"SELECT * FROM animals"#
+        )
+            .fetch_all(&self.pool)
+            .await
     }
 }

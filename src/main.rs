@@ -68,6 +68,7 @@ async fn main() {
         commands::bang::startbang(),
         commands::bang::bang(),
         commands::bang::stopbang(),
+        commands::animal::animal(),
     ];
 
     let translations = translation::read_ftl().expect("failed to read translation files");
@@ -77,7 +78,7 @@ async fn main() {
         .options(poise::FrameworkOptions {
             commands,
             prefix_options: poise::PrefixFrameworkOptions {
-                prefix: Some("ko!".into()),
+                prefix: Some("k!".into()),
                 edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
                     Duration::from_secs(3600),
                 ))),
