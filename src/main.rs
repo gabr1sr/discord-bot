@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use dotenv::dotenv;
+use models::AnimalModel;
 use poise::serenity_prelude as serenity;
 
 pub mod commands;
@@ -19,10 +20,11 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 
 pub struct Data {
     translations: translation::Translations,
-    database: Database,
+    database: Arc<Database>,
     bang_channel: Arc<Mutex<u64>>,
     bang_available: Arc<Mutex<bool>>,
     bang_handles: Arc<Mutex<Vec<JoinHandle<Result<(), Error>>>>>,
+    last_animal: Arc<Mutex<AnimalModel>>,
 }
 
 async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
@@ -75,6 +77,13 @@ async fn main() {
     let translations = translation::read_ftl().expect("failed to read translation files");
     translation::apply_translations(&translations, &mut commands);
 
+    let last_animal = AnimalModel {
+        id: 0,
+        emoji: "".to_owned(),
+        animal: "".to_owned(),
+        points: 0,
+    };
+
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands,
@@ -115,10 +124,11 @@ async fn main() {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {
                     translations,
-                    database,
+                    database: Arc::new(database),
                     bang_channel: Arc::new(Mutex::new(0)),
                     bang_available: Arc::new(Mutex::new(false)),
                     bang_handles: Arc::new(Mutex::new(Vec::new())),
+                    last_animal: Arc::new(Mutex::new(last_animal)),
                 })
             })
         })

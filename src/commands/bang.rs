@@ -1,4 +1,5 @@
-use crate::models::BangPointModel;
+use crate::database::Database;
+use crate::models::{AnimalModel, BangPointModel};
 use crate::{Context, Error};
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -17,7 +18,14 @@ pub async fn startbang(ctx: Context<'_>, channel: ChannelId) -> Result<(), Error
 
     let mut handles = ctx.data().bang_handles.lock().await;
     let bang_available = Arc::clone(&ctx.data().bang_available);
-    handles.push(tokio::spawn(generate_bang(channel, bang_available)));
+    let database = Arc::clone(&ctx.data().database);
+    let last_animal = Arc::clone(&ctx.data().last_animal);
+    handles.push(tokio::spawn(generate_bang(
+        channel,
+        bang_available,
+        database,
+        last_animal,
+    )));
 
     ctx.reply(format!("Bang mini-game started at channel: <#{channel}>"))
         .await?;
@@ -27,10 +35,12 @@ pub async fn startbang(ctx: Context<'_>, channel: ChannelId) -> Result<(), Error
 async fn generate_bang(
     channel_id: ChannelId,
     bang_available: Arc<Mutex<bool>>,
+    database: Arc<Database>,
+    last_animal: Arc<Mutex<AnimalModel>>,
 ) -> Result<(), Error> {
     let interval: u64 = {
-        let min_interval = 300; // 5 minute
-        let max_interval = 1200; // 20 minutes
+        let min_interval = 5; // 5 minute
+        let max_interval = 10; // 20 minutes
         rand::thread_rng().gen_range(min_interval..max_interval)
     };
 
@@ -39,17 +49,20 @@ async fn generate_bang(
     let token = std::env::var("DISCORD_TOKEN").unwrap();
     let http = Http::new(&token);
 
-    let animals = vec![
-        ":duck: A wild duck appeared!",
-        ":boar: A wild boar appeared!",
-        ":deer: A wild deer appeared!",
-        ":rabbit: A wild rabbit appeared!",
-    ];
+    let animals = database.get_animals().await.unwrap();
 
-    let animal = animals.choose(&mut rand::thread_rng());
+    let animal = animals.choose(&mut rand::thread_rng()).unwrap();
 
-    let map = json!({ "content": animal });
+    let map = json!({ "content": format!("{} A wild {} appeared!", animal.emoji.clone(), animal.animal.clone()) });
     http.send_message(channel_id, vec![], &map).await?;
+
+    let mut last_animal_mut = last_animal.lock().await;
+    *last_animal_mut = AnimalModel {
+        id: animal.id,
+        emoji: animal.emoji.clone(),
+        animal: animal.animal.clone(),
+        points: animal.points,
+    };
 
     let mut is_bang_available = bang_available.lock().await;
     *is_bang_available = true;
@@ -67,9 +80,36 @@ pub async fn bang(ctx: Context<'_>) -> Result<(), Error> {
         let mut handles = ctx.data().bang_handles.lock().await;
         let channel_id = ctx.channel_id();
         let arc_bang_available = Arc::clone(&ctx.data().bang_available);
-        handles.push(tokio::spawn(generate_bang(channel_id, arc_bang_available)));
+        let database = Arc::clone(&ctx.data().database);
+        let arc_last_animal = Arc::clone(&ctx.data().last_animal);
 
-        format!("Nice shot!")
+        let last_animal = arc_last_animal.lock().await;
+        let animal_emoji = last_animal.emoji.clone();
+        let animal_name = last_animal.animal.clone();
+        let animal_points = last_animal.points;
+
+        drop(last_animal);
+
+        let user_id = ctx.author().id.to_string();
+
+        if let Ok(_) = database
+            .create_or_add_user_bang_points(user_id, animal_points)
+            .await
+        {
+            handles.push(tokio::spawn(generate_bang(
+                channel_id,
+                arc_bang_available,
+                database,
+                arc_last_animal,
+            )));
+
+            format!(
+                "Nice! You just shot a {} {} and gained `{}` points!",
+                animal_emoji, animal_name, animal_points
+            )
+        } else {
+            format!("Failed to update user points! Stopping bang minigame...")
+        }
     } else {
         format!("Bang isn't available yet!")
     };

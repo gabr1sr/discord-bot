@@ -65,4 +65,56 @@ impl Database {
         .fetch_all(&self.pool)
         .await
     }
+
+    pub async fn get_user_bang_points(&self, user_id: String) -> Result<BangPointModel, Error> {
+        sqlx::query_as!(
+            BangPointModel,
+            r#"SELECT * FROM bang_points WHERE user_id = $1"#,
+            user_id
+        )
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    pub async fn add_user_bang_points(
+        &self,
+        user_id: String,
+        points: i32,
+    ) -> Result<BangPointModel, Error> {
+        sqlx::query_as!(
+            BangPointModel,
+            r#"UPDATE bang_points SET points = points + $1 WHERE user_id = $2 RETURNING id, user_id, points"#,
+            points,
+            user_id
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    pub async fn create_user_bang_points(
+        &self,
+        user_id: String,
+        points: i32,
+    ) -> Result<BangPointModel, Error> {
+        sqlx::query_as!(
+            BangPointModel,
+            r#"INSERT INTO bang_points (user_id, points) VALUES ($1, $2) RETURNING id, user_id, points"#,
+            user_id,
+            points
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    pub async fn create_or_add_user_bang_points(
+        &self,
+        user_id: String,
+        points: i32,
+    ) -> Result<BangPointModel, Error> {
+        if let Ok(_) = self.get_user_bang_points(user_id.clone()).await {
+            return self.add_user_bang_points(user_id, points).await;
+        }
+
+        self.create_user_bang_points(user_id, points).await
+    }
 }
