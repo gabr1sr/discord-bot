@@ -54,12 +54,12 @@ pub struct AnimalModel {
     pub id: i32,
     pub animal: String,
     pub emoji: String,
-    pub points: i32
+    pub points: i32,
 }
 
 #[derive(Debug, sqlx::FromRow)]
 pub struct BangPointModel {
     pub id: i32,
     pub user_id: String,
-    pub points: i32
+    pub points: i32,
 }

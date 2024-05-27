@@ -32,7 +32,7 @@ async fn generate_bang(
         let max_interval = 1200; // 20 minutes
         rand::thread_rng().gen_range(min_interval..max_interval)
     };
-    
+
     tokio::time::sleep(Duration::from_secs(interval)).await;
 
     let token = std::env::var("DISCORD_TOKEN").unwrap();
