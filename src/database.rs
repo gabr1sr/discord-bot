@@ -1,4 +1,4 @@
-use crate::models::AnimalModel;
+use crate::models::{AnimalModel, BangPointModel};
 use sqlx::{
     postgres::{PgPoolOptions, PgQueryResult},
     Error, Pool, Postgres,
@@ -55,5 +55,14 @@ impl Database {
         sqlx::query_as!(AnimalModel, r#"SELECT * FROM animals"#)
             .fetch_all(&self.pool)
             .await
+    }
+
+    pub async fn get_bang_ranking(&self) -> Result<Vec<BangPointModel>, Error> {
+        sqlx::query_as!(
+            BangPointModel,
+            r#"SELECT * FROM bang_points ORDER BY points LIMIT 10"#
+        )
+        .fetch_all(&self.pool)
+        .await
     }
 }

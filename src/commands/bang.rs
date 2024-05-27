@@ -1,3 +1,4 @@
+use crate::models::BangPointModel;
 use crate::{Context, Error};
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -98,4 +99,32 @@ pub async fn stopbang(ctx: Context<'_>) -> Result<(), Error> {
 
     ctx.reply("Bang mini-game stopped!").await?;
     Ok(())
+}
+
+#[poise::command(slash_command, prefix_command, category = "Bang")]
+pub async fn ranking(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer().await?;
+
+    if let Ok(result) = ctx.data().database.get_bang_ranking().await {
+        let res = parse_ranking(&result);
+        ctx.reply(res).await?;
+        return Ok(());
+    }
+
+    ctx.reply("No one is ranked!").await?;
+    Ok(())
+}
+
+fn parse_ranking(bang_points: &[BangPointModel]) -> String {
+    if bang_points.is_empty() {
+        return "No one is ranked!".to_owned();
+    }
+
+    let mut lines = Vec::new();
+    lines.extend(
+        bang_points
+            .iter()
+            .map(|b| format!("- `{}` | `{}` points", b.user_id, b.points)),
+    );
+    lines.join("\n")
 }

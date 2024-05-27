@@ -68,6 +68,7 @@ async fn main() {
         commands::bang::startbang(),
         commands::bang::bang(),
         commands::bang::stopbang(),
+        commands::bang::ranking(),
         commands::animal::animal(),
     ];
 
