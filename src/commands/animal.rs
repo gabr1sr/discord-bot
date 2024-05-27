@@ -1,9 +1,9 @@
-use crate::{Context, Error};
+use crate::{models::AnimalModel, Context, Error};
 
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("add", "see", "remove"),
+    subcommands("add", "see", "remove", "list"),
     subcommand_required,
     category = "Bang"
 )]
@@ -85,4 +85,32 @@ pub async fn remove(ctx: Context<'_>, animal: String) -> Result<(), Error> {
     ctx.reply(format!("Failed to remove animal: `{animal}`"))
         .await?;
     Ok(())
+}
+
+#[poise::command(ephemeral, slash_command, prefix_command, guild_only)]
+pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    if let Ok(result) = ctx.data().database.get_animals().await {
+        let res = parse_animals(&result);
+        ctx.reply(res).await?;
+        return Ok(());
+    }
+
+    ctx.reply("No animals!".to_owned()).await?;
+    Ok(())
+}
+
+fn parse_animals(animals: &[AnimalModel]) -> String {
+    if animals.is_empty() {
+        return "No animals!".to_owned();
+    }
+
+    let mut lines = Vec::new();
+    lines.extend(
+        animals
+            .iter()
+            .map(|a| format!("- `{}` | `{}` | `{}` points", a.animal, a.emoji, a.points)),
+    );
+    lines.join("\n")
 }
