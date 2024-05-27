@@ -3,7 +3,7 @@ use crate::{Context, Error};
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("add"),
+    subcommands("add", "see"),
     subcommand_required,
     category = "Bang"
 )]
@@ -41,5 +41,22 @@ pub async fn add(
 
     let res = format!("Failed to add new animal: `{animal}`!");
     ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(ephemeral, slash_command, prefix_command, guild_only)]
+pub async fn see(ctx: Context<'_>, animal: String) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    if let Ok(model) = ctx.data().database.get_animal(&animal).await {
+        let emoji = model.emoji;
+        let points = model.points;
+        let res = format!("Animal: `{animal}`\nEmoji: `{emoji}`\nPoints: `{points}`");
+        ctx.reply(res).await?;
+        return Ok(());
+    }
+
+    ctx.reply(format!("Failed to retrieve animal `{animal}`!"))
+        .await?;
     Ok(())
 }
