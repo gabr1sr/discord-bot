@@ -1,5 +1,6 @@
 use crate::models::{
-    AnimalModel, BangPointModel, InfractionModel, Punishment, PunishmentModel, UserInfractionModel, Severity
+    AnimalModel, BangPointModel, InfractionModel, Punishment, PunishmentModel, Severity,
+    UserInfractionModel,
 };
 use sqlx::{
     postgres::{PgPoolOptions, PgQueryResult},
