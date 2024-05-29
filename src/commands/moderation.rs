@@ -36,7 +36,7 @@ pub async fn kick(ctx: Context<'_>, users: String, reason: String) -> Result<(),
         return Ok(());
     }
 
-    let result = kick_users_punishment(ctx, guild_id, &mut user_ids, reason).await?;
+    let result = kick_users(ctx, guild_id, &mut user_ids, reason, None).await?;
     let res = punish_response(result);
     ctx.reply(res).await?;
     Ok(())
@@ -239,7 +239,7 @@ pub async fn punish(
             strike_users_infraction(ctx, &mut user_ids, message, infraction.id).await?
         }
         Punishment::Kick => {
-            kick_users_infraction(ctx, guild_id, &mut user_ids, message, infraction.id).await?
+            kick_users(ctx, guild_id, &mut user_ids, message, Some(infraction.id)).await?
         }
     };
 
@@ -270,23 +270,24 @@ fn from_iso8601(duration: String) -> i64 {
     datetime.timestamp() - timestamp_now
 }
 
-async fn kick_users_punishment(
+async fn kick_users(
     ctx: Context<'_>,
     guild_id: GuildId,
     user_ids: &mut Vec<UserId>,
     reason: String,
+    infraction: Option<i32>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
-    let mut kicked = Vec::new();
-    let mut not_kicked = Vec::new();
+    let mut kicked = vec![];
+    let mut not_kicked = vec![];
 
     for user_id in user_ids.iter() {
-        match guild_id
-            .kick_with_reason(&ctx, user_id, reason.as_str())
-            .await
-        {
+        match guild_id.kick_with_reason(&ctx, user_id, &reason).await {
             Ok(_) => {
                 kicked.push(*user_id);
-                log_punishment(&ctx, &user_id, Punishment::Kick, 0).await?;
+                match infraction {
+                    Some(id) => log_user_infraction(&ctx, &user_id, id).await?,
+                    None => log_punishment(&ctx, &user_id, Punishment::Kick, 0).await?,
+                };
             }
             Err(_) => not_kicked.push(*user_id),
         };
@@ -391,6 +392,7 @@ async fn strike_users_punishment(
     let mut striked: Vec<UserId> = Vec::new();
 
     for user_id in user_ids.iter() {
+        // TODO: make create_dm_channel fail safe (strike_user_punishment)
         let channel = user_id.create_dm_channel(ctx).await.unwrap();
         let res = format!("You received a strike:\n{}", message.clone());
         channel.say(ctx, res).await?;
@@ -399,32 +401,6 @@ async fn strike_users_punishment(
     }
 
     Ok((striked, Vec::new()))
-}
-
-async fn kick_users_infraction(
-    ctx: Context<'_>,
-    guild_id: GuildId,
-    user_ids: &mut Vec<UserId>,
-    message: String,
-    infraction_id: i32,
-) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
-    let mut kicked = Vec::new();
-    let mut not_kicked = Vec::new();
-
-    for user_id in user_ids.iter() {
-        match guild_id
-            .kick_with_reason(&ctx, user_id, message.as_str())
-            .await
-        {
-            Ok(_) => {
-                kicked.push(*user_id);
-                log_user_infraction(&ctx, &user_id, infraction_id).await?;
-            }
-            Err(_) => not_kicked.push(*user_id),
-        };
-    }
-
-    Ok((kicked, not_kicked))
 }
 
 async fn ban_users_infraction(
@@ -487,6 +463,7 @@ async fn strike_users_infraction(
     let mut striked: Vec<UserId> = Vec::new();
 
     for user_id in user_ids.iter() {
+        // TODO: make create_dm_channel fail safe (strike_user_infraction)
         let channel = user_id.create_dm_channel(ctx).await.unwrap();
         let res = format!("You received a strike:\n{}", message.clone());
         channel.say(ctx, res).await?;
