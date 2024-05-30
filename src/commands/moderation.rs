@@ -433,7 +433,10 @@ async fn strike_users(
         match user_id.create_dm_channel(&ctx).await {
             Ok(channel) => {
                 let res = format!("You received a strike:\n{}", &reason);
-                channel.say(&ctx, res).await?;
+                match channel.say(&ctx, res).await {
+                    Ok(_) => (),
+                    Err(_) => (),
+                }
             }
             Err(_) => (),
         };
