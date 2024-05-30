@@ -56,6 +56,7 @@ pub async fn timeout(
     time: i64,
     unit: TimeUnit,
 ) -> Result<(), Error> {
+    // TODO: merge timeout punishment and infraction into one function
     ctx.defer_ephemeral().await?;
     let users_str = users.as_str();
     let mut user_ids: Vec<UserId> = user_ids_from(users_str);
@@ -119,6 +120,7 @@ pub async fn untimeout(ctx: Context<'_>, users: String) -> Result<(), Error> {
     category = "Moderation"
 )]
 pub async fn ban(ctx: Context<'_>, users: String, reason: String) -> Result<(), Error> {
+    // TODO: merge ban punishment and infraction into one function
     ctx.defer_ephemeral().await?;
     let users_str = users.as_str();
     let mut user_ids: Vec<UserId> = user_ids_from(users_str);
@@ -130,7 +132,7 @@ pub async fn ban(ctx: Context<'_>, users: String, reason: String) -> Result<(), 
         return Ok(());
     }
 
-    let result = ban_users_punishment(ctx, guild_id, &mut user_ids, reason).await?;
+    let result = ban_users(ctx, guild_id, &mut user_ids, reason, None).await?;
     let res = punish_response(result);
     ctx.reply(res).await?;
     Ok(())
@@ -223,7 +225,7 @@ pub async fn punish(
 
     let result = match infraction.punishment {
         Punishment::Ban => {
-            ban_users_infraction(ctx, guild_id, &mut user_ids, message, infraction.id).await?
+            ban_users(ctx, guild_id, &mut user_ids, message, Some(infraction.id)).await?
         }
         Punishment::Timeout => {
             timeout_users_infraction(
@@ -296,23 +298,24 @@ async fn kick_users(
     Ok((kicked, not_kicked))
 }
 
-async fn ban_users_punishment(
+async fn ban_users(
     ctx: Context<'_>,
     guild_id: GuildId,
     user_ids: &mut Vec<UserId>,
     reason: String,
+    infraction: Option<i32>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
-    let mut banned = Vec::new();
-    let mut not_banned = Vec::new();
+    let mut banned = vec![];
+    let mut not_banned = vec![];
 
     for user_id in user_ids.iter() {
-        match guild_id
-            .ban_with_reason(&ctx, user_id, 0, reason.as_str())
-            .await
-        {
+        match guild_id.ban_with_reason(&ctx, user_id, 0, &reason).await {
             Ok(_) => {
                 banned.push(*user_id);
-                log_punishment(&ctx, &user_id, Punishment::Ban, 0).await?;
+                match infraction {
+                    Some(id) => log_user_infraction(&ctx, &user_id, id).await?,
+                    None => log_punishment(&ctx, &user_id, Punishment::Ban, 0).await?,
+                };
             }
             Err(_) => not_banned.push(*user_id),
         };
@@ -392,7 +395,6 @@ async fn strike_users_punishment(
     let mut striked: Vec<UserId> = Vec::new();
 
     for user_id in user_ids.iter() {
-        // TODO: make create_dm_channel fail safe (strike_user_punishment)
         let channel = user_id.create_dm_channel(ctx).await.unwrap();
         let res = format!("You received a strike:\n{}", message.clone());
         channel.say(ctx, res).await?;
@@ -401,32 +403,6 @@ async fn strike_users_punishment(
     }
 
     Ok((striked, Vec::new()))
-}
-
-async fn ban_users_infraction(
-    ctx: Context<'_>,
-    guild_id: GuildId,
-    user_ids: &mut Vec<UserId>,
-    message: String,
-    infraction_id: i32,
-) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
-    let mut banned = Vec::new();
-    let mut not_banned = Vec::new();
-
-    for user_id in user_ids.iter() {
-        match guild_id
-            .ban_with_reason(&ctx, user_id, 0, message.as_str())
-            .await
-        {
-            Ok(_) => {
-                banned.push(*user_id);
-                log_user_infraction(&ctx, user_id, infraction_id).await?;
-            }
-            Err(_) => not_banned.push(*user_id),
-        };
-    }
-
-    Ok((banned, not_banned))
 }
 
 async fn timeout_users_infraction(
@@ -463,7 +439,7 @@ async fn strike_users_infraction(
     let mut striked: Vec<UserId> = Vec::new();
 
     for user_id in user_ids.iter() {
-        // TODO: make create_dm_channel fail safe (strike_user_infraction)
+        // TODO: make create_dm_channel fail safe when strike
         let channel = user_id.create_dm_channel(ctx).await.unwrap();
         let res = format!("You received a strike:\n{}", message.clone());
         channel.say(ctx, res).await?;
