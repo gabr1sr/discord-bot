@@ -515,12 +515,9 @@ fn unpunish_response(
 }
 
 fn user_ids_to_mentions(user_ids: Vec<UserId>) -> Vec<String> {
-    let raw_ids = user_ids.iter().map(|u| u.get());
-    let mut mentions = Vec::new();
-
-    for id in raw_ids {
-        mentions.push(format!("<@{id}>"));
-    }
-
-    mentions
+    user_ids
+        .iter()
+        .map(|u| u.get())
+        .map(|id| format!("<@{id}>"))
+        .collect()
 }
