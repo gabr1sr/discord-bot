@@ -467,11 +467,11 @@ async fn assert_highest_role(ctx: &Context<'_>, user_ids: &mut Vec<UserId>) -> R
 
     for user_id in user_ids.iter() {
         let member = guild_id.member(&ctx, user_id).await.unwrap();
-        let (_, member_role_position) = member.highest_role_info(ctx).unwrap();
 
-        if member_role_position >= author_role_position {
-            return Ok(false);
-        }
+        return Ok(match member.highest_role_info(&ctx) {
+            Some((_, member_role_position)) => author_role_position >= member_role_position,
+            None => true,
+        });
     }
 
     Ok(true)
