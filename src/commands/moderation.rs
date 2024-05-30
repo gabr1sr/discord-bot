@@ -79,7 +79,7 @@ pub async fn timeout(
     };
 
     let duration = to_iso8601(duration_i64);
-    let result = timeout_users_punishment(ctx, guild_id, &mut user_ids, duration).await?;
+    let result = timeout_userst(ctx, guild_id, &mut user_ids, duration, None).await?;
     let res = punish_response(result);
     ctx.reply(res).await?;
     Ok(())
@@ -228,12 +228,12 @@ pub async fn punish(
             ban_users(ctx, guild_id, &mut user_ids, message, Some(infraction.id)).await?
         }
         Punishment::Timeout => {
-            timeout_users_infraction(
+            timeout_users(
                 ctx,
                 guild_id,
                 &mut user_ids,
                 to_iso8601(infraction.duration),
-                infraction.id,
+                Some(infraction.id),
             )
             .await?
         }
@@ -362,14 +362,15 @@ async fn untimeout_users(
     Ok((untimedout, not_untimedout))
 }
 
-async fn timeout_users_punishment(
+async fn timeout_users(
     ctx: Context<'_>,
     guild_id: GuildId,
     user_ids: &mut Vec<UserId>,
     duration: String,
+    infraction: Some<i32>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
-    let mut timedout = Vec::new();
-    let mut not_timedout = Vec::new();
+    let mut timedout = vec![];
+    let mut not_timedout = vec![];
     let duration_i64 = from_iso8601(duration.clone());
 
     for user_id in user_ids.iter() {
@@ -378,7 +379,10 @@ async fn timeout_users_punishment(
         match guild_id.edit_member(&ctx, *user_id, builder).await {
             Ok(_) => {
                 timedout.push(*user_id);
-                log_punishment(&ctx, user_id, Punishment::Timeout, duration_i64).await?;
+                match infraction {
+                    Some(id) => log_user_infraction(&ctx, &user_id, id).await?,
+                    None => log_punishment(&ctx, &user_id, Punishment::Timeout, 0).await?,
+                };
             }
             Err(_) => not_timedout.push(*user_id),
         };
@@ -403,31 +407,6 @@ async fn strike_users_punishment(
     }
 
     Ok((striked, Vec::new()))
-}
-
-async fn timeout_users_infraction(
-    ctx: Context<'_>,
-    guild_id: GuildId,
-    user_ids: &mut Vec<UserId>,
-    duration: String,
-    infraction_id: i32,
-) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
-    let mut timedout = Vec::new();
-    let mut not_timedout = Vec::new();
-
-    for user_id in user_ids.iter() {
-        let builder = EditMember::new().disable_communication_until(duration.clone());
-
-        match guild_id.edit_member(&ctx, *user_id, builder).await {
-            Ok(_) => {
-                timedout.push(*user_id);
-                log_user_infraction(&ctx, user_id, infraction_id).await?;
-            }
-            Err(_) => not_timedout.push(*user_id),
-        };
-    }
-
-    Ok((timedout, not_timedout))
 }
 
 async fn strike_users_infraction(
