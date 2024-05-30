@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use crate::models::{InfractionModel, Punishment, PunishmentModel, Severity, UserInfractionModel};
+use crate::models::{InfractionModel, Punishment, Severity};
 use crate::utils::user_ids_from;
 use crate::{Context, Error};
 use serenity::all::GuildId;
@@ -287,8 +287,18 @@ async fn kick_users(
             Ok(_) => {
                 kicked.push(*user_id);
                 match infraction {
-                    Some(id) => log_user_infraction(&ctx, &user_id, id).await?,
-                    None => log_punishment(&ctx, &user_id, Punishment::Kick, 0).await?,
+                    Some(id) => {
+                        ctx.data()
+                            .database
+                            .log_user_infraction(&user_id, id)
+                            .await?;
+                    }
+                    None => {
+                        ctx.data()
+                            .database
+                            .log_user_punishment(&user_id, Punishment::Kick, 0)
+                            .await?;
+                    }
                 };
             }
             Err(_) => not_kicked.push(*user_id),
@@ -313,8 +323,18 @@ async fn ban_users(
             Ok(_) => {
                 banned.push(*user_id);
                 match infraction {
-                    Some(id) => log_user_infraction(&ctx, &user_id, id).await?,
-                    None => log_punishment(&ctx, &user_id, Punishment::Ban, 0).await?,
+                    Some(id) => {
+                        ctx.data()
+                            .database
+                            .log_user_infraction(&user_id, id)
+                            .await?;
+                    }
+                    None => {
+                        ctx.data()
+                            .database
+                            .log_user_punishment(&user_id, Punishment::Ban, 0)
+                            .await?;
+                    }
                 };
             }
             Err(_) => not_banned.push(*user_id),
@@ -380,9 +400,17 @@ async fn timeout_users(
             Ok(_) => {
                 timedout.push(*user_id);
                 match infraction {
-                    Some(id) => log_user_infraction(&ctx, &user_id, id).await?,
+                    Some(id) => {
+                        ctx.data()
+                            .database
+                            .log_user_infraction(&user_id, id)
+                            .await?;
+                    }
                     None => {
-                        log_punishment(&ctx, &user_id, Punishment::Timeout, duration_i64).await?
+                        ctx.data()
+                            .database
+                            .log_user_punishment(&user_id, Punishment::Timeout, duration_i64)
+                            .await?;
                     }
                 };
             }
@@ -397,7 +425,7 @@ async fn strike_users(
     ctx: Context<'_>,
     user_ids: &mut Vec<UserId>,
     reason: String,
-    infraction: Option<i32>
+    infraction: Option<i32>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut striked = vec![];
 
@@ -406,14 +434,22 @@ async fn strike_users(
             Ok(channel) => {
                 let res = format!("You received a strike:\n{}", &reason);
                 channel.say(&ctx, res).await?;
-            },
+            }
             Err(_) => (),
         };
 
         match infraction {
-            Some(id) => log_user_infraction(&ctx, &user_id, id).await?,
+            Some(id) => {
+                ctx.data()
+                    .database
+                    .log_user_infraction(&user_id, id)
+                    .await?;
+            }
             None => {
-                log_punishment(&ctx, &user_id, Punishment::Strike, 0).await?
+                ctx.data()
+                    .database
+                    .log_user_punishment(&user_id, Punishment::Strike, 0)
+                    .await?;
             }
         };
 
@@ -439,47 +475,6 @@ async fn assert_highest_role(ctx: &Context<'_>, user_ids: &mut Vec<UserId>) -> R
     }
 
     Ok(true)
-}
-
-async fn log_punishment(
-    ctx: &Context<'_>,
-    user_id: &UserId,
-    punishment: Punishment,
-    duration: i64,
-) -> Result<(), Error> {
-    let punishment = sqlx::query_as!(
-        PunishmentModel,
-        r#"INSERT INTO punishments (user_id, punishment, duration) VALUES ($1, $2, $3) RETURNING id, user_id, punishment AS "punishment!: Punishment", duration"#,
-        user_id.get().to_string(),
-        punishment as Punishment,
-        duration
-    )
-        .fetch_one(&ctx.data().database.pool)
-        .await
-        .unwrap();
-
-    println!("{:?}", punishment);
-    Ok(())
-}
-
-async fn log_user_infraction(
-    ctx: &Context<'_>,
-    user_id: &UserId,
-    infraction_id: i32,
-) -> Result<(), Error> {
-    let user_infraction = sqlx::query_as!(
-        UserInfractionModel,
-        r#"INSERT INTO user_infractions (user_id, infraction_id) VALUES ($1, $2) RETURNING id, user_id, infraction_id, created_at"#,
-        user_id.get().to_string(),
-        infraction_id,
-    )
-        .fetch_one(&ctx.data().database.pool)
-        .await
-        .unwrap();
-
-    println!("{:?}", user_infraction);
-
-    Ok(())
 }
 
 fn punish_response((punished_users, not_punished_users): (Vec<UserId>, Vec<UserId>)) -> String {

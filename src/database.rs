@@ -2,6 +2,7 @@ use crate::models::{
     AnimalModel, BangPointModel, InfractionModel, Punishment, PunishmentModel, Severity,
     UserInfractionModel,
 };
+use serenity::all::UserId;
 use sqlx::{
     postgres::{PgPoolOptions, PgQueryResult},
     Error, Pool, Postgres,
@@ -63,7 +64,7 @@ impl Database {
     pub async fn get_bang_ranking(&self) -> Result<Vec<BangPointModel>, Error> {
         sqlx::query_as!(
             BangPointModel,
-            r#"SELECT * FROM bang_points ORDER BY points LIMIT 10"#
+            r#"SELECT * FROM bang_points ORDER BY points DESC LIMIT 10"#
         )
         .fetch_all(&self.pool)
         .await
@@ -123,14 +124,14 @@ impl Database {
 
     pub async fn log_user_punishment(
         &self,
-        user_id: String,
+        user_id: &UserId,
         punishment: Punishment,
         duration: i64,
     ) -> Result<PunishmentModel, Error> {
         sqlx::query_as!(
             PunishmentModel,
             r#"INSERT INTO punishments (user_id, punishment, duration) VALUES ($1, $2, $3) RETURNING id, user_id, punishment AS "punishment!: Punishment", duration"#,
-            user_id,
+            user_id.get().to_string(),
             punishment as Punishment,
             duration
         )
@@ -140,13 +141,13 @@ impl Database {
 
     pub async fn log_user_infraction(
         &self,
-        user_id: String,
+        user_id: &UserId,
         infraction_id: i32,
     ) -> Result<UserInfractionModel, Error> {
         sqlx::query_as!(
             UserInfractionModel,
             r#"INSERT INTO user_infractions (user_id, infraction_id) VALUES ($1, $2) RETURNING id, user_id, infraction_id, created_at"#,
-            user_id,
+            user_id.get().to_string(),
             infraction_id
         )
             .fetch_one(&self.pool)

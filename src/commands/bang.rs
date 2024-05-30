@@ -39,8 +39,8 @@ async fn generate_bang(
     last_animal: Arc<Mutex<AnimalModel>>,
 ) -> Result<(), Error> {
     let interval: u64 = {
-        let min_interval = 300; // 5 minute
-        let max_interval = 600; // 10 minutes
+        let min_interval = 3; // 5 minute
+        let max_interval = 6; // 10 minutes
         rand::thread_rng().gen_range(min_interval..max_interval)
     };
 
