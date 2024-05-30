@@ -381,7 +381,9 @@ async fn timeout_users(
                 timedout.push(*user_id);
                 match infraction {
                     Some(id) => log_user_infraction(&ctx, &user_id, id).await?,
-                    None => log_punishment(&ctx, &user_id, Punishment::Timeout, duration_i64).await?,
+                    None => {
+                        log_punishment(&ctx, &user_id, Punishment::Timeout, duration_i64).await?
+                    }
                 };
             }
             Err(_) => not_timedout.push(*user_id),
