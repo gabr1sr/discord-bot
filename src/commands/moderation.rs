@@ -176,7 +176,7 @@ pub async fn strike(ctx: Context<'_>, users: String, reason: String) -> Result<(
         return Ok(());
     }
 
-    let result = strike_users_punishment(ctx, &mut user_ids, reason).await?;
+    let result = strike_users(ctx, &mut user_ids, reason, None).await?;
     let res = punish_response(result);
     ctx.reply(res).await?;
     Ok(())
@@ -238,7 +238,7 @@ pub async fn punish(
             .await?
         }
         Punishment::Strike => {
-            strike_users_infraction(ctx, &mut user_ids, message, infraction.id).await?
+            strike_users(ctx, &mut user_ids, message, Some(infraction.id)).await?
         }
         Punishment::Kick => {
             kick_users(ctx, guild_id, &mut user_ids, message, Some(infraction.id)).await?
@@ -393,42 +393,34 @@ async fn timeout_users(
     Ok((timedout, not_timedout))
 }
 
-async fn strike_users_punishment(
+async fn strike_users(
     ctx: Context<'_>,
     user_ids: &mut Vec<UserId>,
-    message: String,
+    reason: String,
+    infraction: Option<i32>
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
-    let mut striked: Vec<UserId> = Vec::new();
+    let mut striked = vec![];
 
     for user_id in user_ids.iter() {
-        let channel = user_id.create_dm_channel(ctx).await.unwrap();
-        let res = format!("You received a strike:\n{}", message.clone());
-        channel.say(ctx, res).await?;
+        match user_id.create_dm_channel(&ctx).await {
+            Ok(channel) => {
+                let res = format!("You received a strike:\n{}", &reason);
+                channel.say(&ctx, res).await?;
+            },
+            Err(_) => (),
+        };
+
+        match infraction {
+            Some(id) => log_user_infraction(&ctx, &user_id, id).await?,
+            None => {
+                log_punishment(&ctx, &user_id, Punishment::Strike, 0).await?
+            }
+        };
+
         striked.push(*user_id);
-        log_punishment(&ctx, user_id, Punishment::Strike, 0).await?;
     }
 
-    Ok((striked, Vec::new()))
-}
-
-async fn strike_users_infraction(
-    ctx: Context<'_>,
-    user_ids: &mut Vec<UserId>,
-    message: String,
-    infraction_id: i32,
-) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
-    let mut striked: Vec<UserId> = Vec::new();
-
-    for user_id in user_ids.iter() {
-        // TODO: make create_dm_channel fail safe when strike
-        let channel = user_id.create_dm_channel(ctx).await.unwrap();
-        let res = format!("You received a strike:\n{}", message.clone());
-        channel.say(ctx, res).await?;
-        striked.push(*user_id);
-        log_user_infraction(&ctx, user_id, infraction_id).await?;
-    }
-
-    Ok((striked, Vec::new()))
+    Ok((striked, vec![]))
 }
 
 async fn assert_highest_role(ctx: &Context<'_>, user_ids: &mut Vec<UserId>) -> Result<bool, Error> {
