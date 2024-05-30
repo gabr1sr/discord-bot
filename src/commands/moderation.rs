@@ -79,7 +79,7 @@ pub async fn timeout(
     };
 
     let duration = to_iso8601(duration_i64);
-    let result = timeout_userst(ctx, guild_id, &mut user_ids, duration, None).await?;
+    let result = timeout_users(ctx, guild_id, &mut user_ids, duration, None).await?;
     let res = punish_response(result);
     ctx.reply(res).await?;
     Ok(())
@@ -367,7 +367,7 @@ async fn timeout_users(
     guild_id: GuildId,
     user_ids: &mut Vec<UserId>,
     duration: String,
-    infraction: Some<i32>,
+    infraction: Option<i32>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut timedout = vec![];
     let mut not_timedout = vec![];
@@ -381,7 +381,7 @@ async fn timeout_users(
                 timedout.push(*user_id);
                 match infraction {
                     Some(id) => log_user_infraction(&ctx, &user_id, id).await?,
-                    None => log_punishment(&ctx, &user_id, Punishment::Timeout, 0).await?,
+                    None => log_punishment(&ctx, &user_id, Punishment::Timeout, duration_i64).await?,
                 };
             }
             Err(_) => not_timedout.push(*user_id),
