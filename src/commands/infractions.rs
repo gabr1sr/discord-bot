@@ -1,4 +1,4 @@
-use crate::models::{InfractionModel, Punishment, Severity, UserInfractionModel};
+use crate::models::{InfractionModel, Punishment, Severity};
 use crate::{Context, Error};
 use serenity::model::id::UserId;
 
@@ -63,16 +63,20 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
     if let Ok(infractions) = ctx.data().database.get_infractions().await {
-        let res = infractions
-            .iter()
-            .map(|i| {
-                format!(
-                    "- ID: `{}` | Severity: `{:?}` | Punishment: `{:?}` | Duration: `{}`",
-                    i.id, i.severity, i.punishment, i.duration
-                )
-            })
-            .collect::<Vec<String>>()
-            .join("\n");
+        let res = if infractions.is_empty() {
+            "No infractions in table!".to_owned()
+        } else {
+            infractions
+                .iter()
+                .map(|i| {
+                    format!(
+                        "- ID: `{}` | Severity: `{:?}` | Punishment: `{:?}` | Duration: `{}`",
+                        i.id, i.severity, i.punishment, i.duration
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join("\n")
+        };
 
         ctx.reply(res).await?;
         return Ok(());
@@ -116,26 +120,24 @@ pub async fn remove(ctx: Context<'_>, id: i32) -> Result<(), Error> {
 )]
 pub async fn user(ctx: Context<'_>, member: UserId) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let user_id = member.get().to_string();
 
-    if let Ok(user_infractions) = sqlx::query_as!(
-        UserInfractionModel,
-        r#"SELECT * FROM user_infractions WHERE user_id = $1"#,
-        user_id,
-    )
-    .fetch_all(&ctx.data().database.pool)
-    .await
-    {
-        let mut infractions_str = String::new();
+    if let Ok(infractions) = ctx.data().database.get_user_infractions(member).await {
+        let res = if infractions.is_empty() {
+            "User has no infractions!".to_owned()
+        } else {
+            infractions
+                .iter()
+                .map(|i| {
+                    format!(
+                        "- ID: `{}` | User ID: `{}` | Infraction ID: `{}` | Created At: `{:?}`",
+                        i.id, i.user_id, i.infraction_id, i.created_at
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join("\n")
+        };
 
-        for infraction in user_infractions {
-            let formatted = format_user_infraction(infraction);
-            infractions_str.push_str(formatted.as_str());
-        }
-
-        let vec_pages: Vec<&str> = infractions_str.split("\r\n").collect();
-        let pages: &[&str] = vec_pages.as_slice();
-        poise::samples::paginate(ctx, pages).await?;
+        ctx.reply(res).await?;
         return Ok(());
     }
 
@@ -154,19 +156,5 @@ fn format_infraction(
     format!(
         "ID: {}\nSeverity: {:?}\nPunishment: {:?}\nDuration: {}\r\n",
         id, severity, punishment, duration
-    )
-}
-
-fn format_user_infraction(
-    UserInfractionModel {
-        id,
-        user_id,
-        infraction_id,
-        created_at,
-    }: UserInfractionModel,
-) -> String {
-    format!(
-        "<@{}> Case ID: {}\nInfraction ID: {}\nCreated at: {:?}\r\n",
-        user_id, id, infraction_id, created_at
     )
 }

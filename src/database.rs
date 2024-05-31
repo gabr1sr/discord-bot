@@ -197,4 +197,17 @@ impl Database {
             .execute(&self.pool)
             .await
     }
+
+    pub async fn get_user_infractions(
+        &self,
+        user_id: UserId,
+    ) -> Result<Vec<UserInfractionModel>, Error> {
+        sqlx::query_as!(
+            UserInfractionModel,
+            r#"SELECT * FROM user_infractions WHERE user_id = $1"#,
+            user_id.get().to_string()
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
 }
