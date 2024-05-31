@@ -1,7 +1,6 @@
 use crate::models::{InfractionModel, Punishment, Severity, UserInfractionModel};
 use crate::{Context, Error};
 use serenity::model::id::UserId;
-use sqlx::postgres::PgQueryResult;
 
 #[poise::command(
     slash_command,
@@ -92,17 +91,19 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 )]
 pub async fn remove(ctx: Context<'_>, id: i32) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let result: PgQueryResult = sqlx::query!("DELETE FROM infractions WHERE id = $1", id)
-        .execute(&ctx.data().database.pool)
-        .await
-        .unwrap();
 
-    let res = match result.rows_affected() {
-        1 => "Infraction deleted!",
-        _ => "Infraction not deleted!",
-    };
+    if let Ok(result) = ctx.data().database.remove_infraction(id).await {
+        let res = match result.rows_affected() {
+            0 => "No infraction removed!".to_owned(),
+            1 => "Infraction removed successfully!".to_owned(),
+            _ => "Infractions removed successfully!".to_owned(),
+        };
 
-    ctx.reply(res).await?;
+        ctx.reply(res).await?;
+        return Ok(());
+    }
+
+    ctx.reply(format!("Failed to remove infraction!")).await?;
     Ok(())
 }
 

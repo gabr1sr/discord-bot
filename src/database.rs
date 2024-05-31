@@ -191,4 +191,10 @@ impl Database {
             .fetch_one(&self.pool)
             .await
     }
+
+    pub async fn remove_infraction(&self, id: i32) -> Result<PgQueryResult, Error> {
+        sqlx::query!("DELETE FROM infractions WHERE id = $1", id)
+            .execute(&self.pool)
+            .await
+    }
 }
