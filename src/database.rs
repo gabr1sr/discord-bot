@@ -163,4 +163,23 @@ impl Database {
             .fetch_one(&self.pool)
             .await
     }
+
+    pub async fn add_infraction(
+        &self,
+        id: i32,
+        severity: Severity,
+        punishment: Punishment,
+        duration: i64,
+    ) -> Result<InfractionModel, Error> {
+        sqlx::query_as!(
+            InfractionModel,
+            r#"INSERT INTO infractions (id, severity, punishment, duration) VALUES ($1, $2, $3, $4) RETURNING id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration"#,
+            id,
+            severity as Severity,
+            punishment as Punishment,
+            duration
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
 }

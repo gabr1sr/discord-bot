@@ -30,33 +30,26 @@ pub async fn add(
     duration: i64,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    if let Ok(_) = sqlx::query_as!(
-        InfractionModel,
-        r#"SELECT id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration FROM infractions WHERE id = $1"#,
-        id
-    )
-        .fetch_one(&ctx.data().database.pool)
-        .await {
-            let res = format!("Infraction with ID `{id}` already exists!");
-            ctx.reply(res).await?;
-            return Ok(());
-        }
 
-    let infraction = sqlx::query_as!(
-        InfractionModel,
-        r#"INSERT INTO infractions (id, severity, punishment, duration) VALUES ($1, $2, $3, $4) RETURNING id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration"#,
-        id,
-        severity as Severity,
-        punishment as Punishment,
-        duration
-    )
-        .fetch_one(&ctx.data().database.pool)
+    if let Ok(_) = ctx.data().database.get_infraction(id).await {
+        ctx.reply(format!("Infraction ID {id} already exists!"))
+            .await?;
+        return Ok(());
+    }
+
+    if let Ok(infraction) = ctx
+        .data()
+        .database
+        .add_infraction(id, severity, punishment, duration)
         .await
-        .unwrap();
+    {
+        let data = format_infraction(infraction);
+        ctx.reply(format!("Infraction created!\n{data}")).await?;
+        return Ok(());
+    }
 
-    let inf = format_infraction(infraction);
-    let res = format!("Infraction created!\n{}", inf);
-    ctx.reply(res).await?;
+    ctx.reply(format!("Failed to create infraction ID {id}!"))
+        .await?;
     Ok(())
 }
 
