@@ -164,6 +164,15 @@ impl Database {
             .await
     }
 
+    pub async fn get_infractions(&self) -> Result<Vec<InfractionModel>, Error> {
+        sqlx::query_as!(
+            InfractionModel,
+            r#"SELECT id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration FROM infractions"#
+        )
+            .fetch_all(&self.pool)
+            .await
+    }
+
     pub async fn add_infraction(
         &self,
         id: i32,

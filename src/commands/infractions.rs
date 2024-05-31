@@ -62,29 +62,24 @@ pub async fn add(
 )]
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let result = sqlx::query_as!(
-        InfractionModel,
-        r#"SELECT id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration FROM infractions ORDER BY id"#,
-    )
-        .fetch_all(&ctx.data().database.pool)
-        .await;
 
-    if let Err(_) = result {
-        ctx.reply("No infractions found in the table!").await?;
+    if let Ok(infractions) = ctx.data().database.get_infractions().await {
+        let res = infractions
+            .iter()
+            .map(|i| {
+                format!(
+                    "- ID: `{}` | Severity: `{:?}` | Punishment: `{:?}` | Duration: `{}`",
+                    i.id, i.severity, i.punishment, i.duration
+                )
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        ctx.reply(res).await?;
         return Ok(());
     }
 
-    let infractions = result.unwrap();
-    let mut infractions_str = String::new();
-
-    for infraction in infractions {
-        let formatted = format_infraction(infraction);
-        infractions_str.push_str(formatted.as_str());
-    }
-
-    let vec_pages: Vec<&str> = infractions_str.split("\r\n").collect();
-    let pages: &[&str] = vec_pages.as_slice();
-    poise::samples::paginate(ctx, pages).await?;
+    ctx.reply(format!("No infractions found!")).await?;
     Ok(())
 }
 
