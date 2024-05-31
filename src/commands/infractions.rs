@@ -1,12 +1,11 @@
-use crate::models::{InfractionModel, Punishment, Severity, UserInfractionModel};
+use crate::models::{InfractionModel, Punishment, Severity};
 use crate::{Context, Error};
 use serenity::model::id::UserId;
-use sqlx::postgres::PgQueryResult;
 
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("add", "list", "remove", "user"),
+    subcommands("add", "list", "remove", "user", "edit"),
     subcommand_required,
     required_permissions = "ADMINISTRATOR",
     category = "Infractions"
@@ -30,33 +29,26 @@ pub async fn add(
     duration: i64,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    if let Ok(_) = sqlx::query_as!(
-        InfractionModel,
-        r#"SELECT id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration FROM infractions WHERE id = $1"#,
-        id
-    )
-        .fetch_one(&ctx.data().database.pool)
-        .await {
-            let res = format!("Infraction with ID `{id}` already exists!");
-            ctx.reply(res).await?;
-            return Ok(());
-        }
 
-    let infraction = sqlx::query_as!(
-        InfractionModel,
-        r#"INSERT INTO infractions (id, severity, punishment, duration) VALUES ($1, $2, $3, $4) RETURNING id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration"#,
-        id,
-        severity as Severity,
-        punishment as Punishment,
-        duration
-    )
-        .fetch_one(&ctx.data().database.pool)
+    if let Ok(_) = ctx.data().database.get_infraction(id).await {
+        ctx.reply(format!("Infraction ID {id} already exists!"))
+            .await?;
+        return Ok(());
+    }
+
+    if let Ok(infraction) = ctx
+        .data()
+        .database
+        .add_infraction(id, severity, punishment, duration)
         .await
-        .unwrap();
+    {
+        let data = format_infraction(infraction);
+        ctx.reply(format!("Infraction created!\n{data}")).await?;
+        return Ok(());
+    }
 
-    let inf = format_infraction(infraction);
-    let res = format!("Infraction created!\n{}", inf);
-    ctx.reply(res).await?;
+    ctx.reply(format!("Failed to create infraction ID {id}!"))
+        .await?;
     Ok(())
 }
 
@@ -69,29 +61,28 @@ pub async fn add(
 )]
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let result = sqlx::query_as!(
-        InfractionModel,
-        r#"SELECT id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration FROM infractions ORDER BY id"#,
-    )
-        .fetch_all(&ctx.data().database.pool)
-        .await;
 
-    if let Err(_) = result {
-        ctx.reply("No infractions found in the table!").await?;
+    if let Ok(infractions) = ctx.data().database.get_infractions().await {
+        let res = if infractions.is_empty() {
+            "No infractions in table!".to_owned()
+        } else {
+            infractions
+                .iter()
+                .map(|i| {
+                    format!(
+                        "- ID: `{}` | Severity: `{:?}` | Punishment: `{:?}` | Duration: `{}`",
+                        i.id, i.severity, i.punishment, i.duration
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join("\n")
+        };
+
+        ctx.reply(res).await?;
         return Ok(());
     }
 
-    let infractions = result.unwrap();
-    let mut infractions_str = String::new();
-
-    for infraction in infractions {
-        let formatted = format_infraction(infraction);
-        infractions_str.push_str(formatted.as_str());
-    }
-
-    let vec_pages: Vec<&str> = infractions_str.split("\r\n").collect();
-    let pages: &[&str] = vec_pages.as_slice();
-    poise::samples::paginate(ctx, pages).await?;
+    ctx.reply(format!("No infractions found!")).await?;
     Ok(())
 }
 
@@ -104,17 +95,54 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 )]
 pub async fn remove(ctx: Context<'_>, id: i32) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let result: PgQueryResult = sqlx::query!("DELETE FROM infractions WHERE id = $1", id)
-        .execute(&ctx.data().database.pool)
+
+    if let Ok(result) = ctx.data().database.remove_infraction(id).await {
+        let res = match result.rows_affected() {
+            0 => "No infraction removed!".to_owned(),
+            1 => "Infraction removed successfully!".to_owned(),
+            _ => "Infractions removed successfully!".to_owned(),
+        };
+
+        ctx.reply(res).await?;
+        return Ok(());
+    }
+
+    ctx.reply(format!("Failed to remove infraction!")).await?;
+    Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    required_permissions = "ADMINISTRATOR",
+    guild_only
+)]
+pub async fn edit(
+    ctx: Context<'_>,
+    id: i32,
+    severity: Severity,
+    punishment: Punishment,
+    duration: i64,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    if let Err(_) = ctx.data().database.get_infraction(id).await {
+        ctx.reply("This infraction doesn't exists!").await?;
+        return Ok(());
+    }
+
+    if let Ok(_) = ctx
+        .data()
+        .database
+        .update_infraction(id, severity, punishment, duration)
         .await
-        .unwrap();
+    {
+        ctx.reply("Infraction updated with success!").await?;
+        return Ok(());
+    }
 
-    let res = match result.rows_affected() {
-        1 => "Infraction deleted!",
-        _ => "Infraction not deleted!",
-    };
-
-    ctx.reply(res).await?;
+    ctx.reply("Failed to edit infraction!").await?;
     Ok(())
 }
 
@@ -127,26 +155,24 @@ pub async fn remove(ctx: Context<'_>, id: i32) -> Result<(), Error> {
 )]
 pub async fn user(ctx: Context<'_>, member: UserId) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let user_id = member.get().to_string();
 
-    if let Ok(user_infractions) = sqlx::query_as!(
-        UserInfractionModel,
-        r#"SELECT * FROM user_infractions WHERE user_id = $1"#,
-        user_id,
-    )
-    .fetch_all(&ctx.data().database.pool)
-    .await
-    {
-        let mut infractions_str = String::new();
+    if let Ok(infractions) = ctx.data().database.get_user_infractions(member).await {
+        let res = if infractions.is_empty() {
+            "User has no infractions!".to_owned()
+        } else {
+            infractions
+                .iter()
+                .map(|i| {
+                    format!(
+                        "- ID: `{}` | User ID: `{}` | Infraction ID: `{}` | Created At: `{:?}`",
+                        i.id, i.user_id, i.infraction_id, i.created_at
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join("\n")
+        };
 
-        for infraction in user_infractions {
-            let formatted = format_user_infraction(infraction);
-            infractions_str.push_str(formatted.as_str());
-        }
-
-        let vec_pages: Vec<&str> = infractions_str.split("\r\n").collect();
-        let pages: &[&str] = vec_pages.as_slice();
-        poise::samples::paginate(ctx, pages).await?;
+        ctx.reply(res).await?;
         return Ok(());
     }
 
@@ -165,19 +191,5 @@ fn format_infraction(
     format!(
         "ID: {}\nSeverity: {:?}\nPunishment: {:?}\nDuration: {}\r\n",
         id, severity, punishment, duration
-    )
-}
-
-fn format_user_infraction(
-    UserInfractionModel {
-        id,
-        user_id,
-        infraction_id,
-        created_at,
-    }: UserInfractionModel,
-) -> String {
-    format!(
-        "<@{}> Case ID: {}\nInfraction ID: {}\nCreated at: {:?}\r\n",
-        user_id, id, infraction_id, created_at
     )
 }

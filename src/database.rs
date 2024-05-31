@@ -163,4 +163,70 @@ impl Database {
             .fetch_one(&self.pool)
             .await
     }
+
+    pub async fn get_infractions(&self) -> Result<Vec<InfractionModel>, Error> {
+        sqlx::query_as!(
+            InfractionModel,
+            r#"SELECT id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration FROM infractions"#
+        )
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    pub async fn add_infraction(
+        &self,
+        id: i32,
+        severity: Severity,
+        punishment: Punishment,
+        duration: i64,
+    ) -> Result<InfractionModel, Error> {
+        sqlx::query_as!(
+            InfractionModel,
+            r#"INSERT INTO infractions (id, severity, punishment, duration) VALUES ($1, $2, $3, $4) RETURNING id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration"#,
+            id,
+            severity as Severity,
+            punishment as Punishment,
+            duration
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    pub async fn update_infraction(
+        &self,
+        id: i32,
+        severity: Severity,
+        punishment: Punishment,
+        duration: i64,
+    ) -> Result<InfractionModel, Error> {
+        sqlx::query_as!(
+            InfractionModel,
+            r#"UPDATE infractions SET severity = $1, punishment = $2, duration = $3 WHERE id = $4 RETURNING id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration"#,
+            severity as Severity,
+            punishment as Punishment,
+            duration,
+            id
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    pub async fn remove_infraction(&self, id: i32) -> Result<PgQueryResult, Error> {
+        sqlx::query!("DELETE FROM infractions WHERE id = $1", id)
+            .execute(&self.pool)
+            .await
+    }
+
+    pub async fn get_user_infractions(
+        &self,
+        user_id: UserId,
+    ) -> Result<Vec<UserInfractionModel>, Error> {
+        sqlx::query_as!(
+            UserInfractionModel,
+            r#"SELECT * FROM user_infractions WHERE user_id = $1"#,
+            user_id.get().to_string()
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
 }
