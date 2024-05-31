@@ -192,6 +192,25 @@ impl Database {
             .await
     }
 
+    pub async fn update_infraction(
+        &self,
+        id: i32,
+        severity: Severity,
+        punishment: Punishment,
+        duration: i64,
+    ) -> Result<InfractionModel, Error> {
+        sqlx::query_as!(
+            InfractionModel,
+            r#"UPDATE infractions SET severity = $1, punishment = $2, duration = $3 WHERE id = $4 RETURNING id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration"#,
+            severity as Severity,
+            punishment as Punishment,
+            duration,
+            id
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
+
     pub async fn remove_infraction(&self, id: i32) -> Result<PgQueryResult, Error> {
         sqlx::query!("DELETE FROM infractions WHERE id = $1", id)
             .execute(&self.pool)

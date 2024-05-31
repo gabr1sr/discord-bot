@@ -5,7 +5,7 @@ use serenity::model::id::UserId;
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("add", "list", "remove", "user"),
+    subcommands("add", "list", "remove", "user", "edit"),
     subcommand_required,
     required_permissions = "ADMINISTRATOR",
     category = "Infractions"
@@ -108,6 +108,41 @@ pub async fn remove(ctx: Context<'_>, id: i32) -> Result<(), Error> {
     }
 
     ctx.reply(format!("Failed to remove infraction!")).await?;
+    Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    required_permissions = "ADMINISTRATOR",
+    guild_only
+)]
+pub async fn edit(
+    ctx: Context<'_>,
+    id: i32,
+    severity: Severity,
+    punishment: Punishment,
+    duration: i64,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    if let Err(_) = ctx.data().database.get_infraction(id).await {
+        ctx.reply("This infraction doesn't exists!").await?;
+        return Ok(());
+    }
+
+    if let Ok(_) = ctx
+        .data()
+        .database
+        .update_infraction(id, severity, punishment, duration)
+        .await
+    {
+        ctx.reply("Infraction updated with success!").await?;
+        return Ok(());
+    }
+
+    ctx.reply("Failed to edit infraction!").await?;
     Ok(())
 }
 
