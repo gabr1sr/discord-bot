@@ -8,7 +8,7 @@ use serenity::builder::EditMember;
 use serenity::model::id::UserId;
 use sqlx::types::chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 
-#[derive(poise::ChoiceParameter)]
+#[derive(poise::ChoiceParameter, Debug)]
 enum TimeUnit {
     Seconds,
     Minutes,
@@ -74,7 +74,7 @@ pub async fn kick(ctx: Context<'_>, users: String, reason: String) -> Result<(),
         message.push_str("Failed to execute kick command!");
     }
 
-    ctx.reply(format!("{message}")).await?;
+    ctx.reply(message).await?;
     Ok(())
 }
 
@@ -93,9 +93,13 @@ pub async fn timeout(
     unit: TimeUnit,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let users_str = users.as_str();
-    let mut user_ids: Vec<UserId> = user_ids_from(users_str);
-    let guild_id = ctx.guild_id().unwrap();
+    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+
+    if user_ids.is_empty() {
+        ctx.reply("You must provide at least 1 valid user mention or user ID.")
+            .await?;
+        return Ok(());
+    }
 
     if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
         ctx.reply("One of the users have a role higher than yours.")
@@ -114,9 +118,41 @@ pub async fn timeout(
     };
 
     let duration = to_iso8601(duration_i64);
-    let result = timeout_users(ctx, guild_id, &mut user_ids, duration, None).await?;
-    let res = punish_response(result);
-    ctx.reply(res).await?;
+    let guild_id = ctx.guild_id().unwrap();
+    let (punished_users, not_punished_users) =
+        timeout_users(ctx, guild_id, &mut user_ids, duration, None).await?;
+
+    let mut message = String::new();
+
+    if !punished_users.is_empty() {
+        let punished_mentions = user_ids_to_mentions(punished_users).join(", ");
+        let response = format!(
+            ":white_check_mark: **Successfully timed out members:** {}\n",
+            punished_mentions
+        );
+        message.push_str(&response);
+    }
+
+    if !not_punished_users.is_empty() {
+        let not_punished_mentions = user_ids_to_mentions(not_punished_users).join(", ");
+        let response = format!(
+            ":warning: **Failed to time out members:** {}\n",
+            not_punished_mentions
+        );
+        message.push_str(&response);
+    }
+
+    if time > 0 {
+        let units = format!("{unit:?}").to_lowercase();
+        let response = format!(":information: **Time out duration:** {} {}", time, units);
+        message.push_str(&response);
+    }
+
+    if message.is_empty() {
+        message.push_str("Failed to execute kick command!");
+    }
+
+    ctx.reply(message).await?;
     Ok(())
 }
 
