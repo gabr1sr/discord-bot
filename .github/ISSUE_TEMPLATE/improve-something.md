@@ -1,17 +1,17 @@
 ---
-name: Improve Feature or Command
-about: Suggest the improvement of a feature or command for this project
-title: ''
+name: Improve something
+about: Suggest the improvement of something for this project
+title: 'Improve: something'
 labels: enhacement
 assignees: ''
 
 ---
 
 ## Description
-What feature or command you want to improve and why.
+What you want to improve and why.
 
 ## Improvement
-Your improvement suggestions for the feature or command.
+Your improvement suggestions:
 - [ ] You can list
 - [ ] The improvements
 - [ ] Like this
