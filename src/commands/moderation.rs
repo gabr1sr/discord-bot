@@ -26,9 +26,13 @@ enum TimeUnit {
 )]
 pub async fn kick(ctx: Context<'_>, users: String, reason: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let users_str = users.as_str();
-    let mut user_ids: Vec<UserId> = user_ids_from(users_str);
-    let guild_id = ctx.guild_id().unwrap();
+    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+
+    if users.is_empty() || user_ids.is_empty() {
+        ctx.reply("You must provide at least 1 valid user mention or user ID.")
+            .await?;
+        return Ok(());
+    }
 
     if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
         ctx.reply("One of the users have a role higher than yours.")
@@ -36,9 +40,41 @@ pub async fn kick(ctx: Context<'_>, users: String, reason: String) -> Result<(),
         return Ok(());
     }
 
-    let result = kick_users(ctx, guild_id, &mut user_ids, reason, None).await?;
-    let res = punish_response(result);
-    ctx.reply(res).await?;
+    let guild_id = ctx.guild_id().unwrap();
+
+    let (punished_users, not_punished_users) =
+        kick_users(ctx, guild_id, &mut user_ids, &reason, None).await?;
+
+    let mut message = String::new();
+
+    if !punished_users.is_empty() {
+        let punished_mentions = user_ids_to_mentions(punished_users).join(", ");
+        let response = format!(
+            ":white_check_mark: **Successfully kicked members:** {}\n",
+            punished_mentions
+        );
+        message.push_str(&response);
+    }
+
+    if !not_punished_users.is_empty() {
+        let not_punished_mentions = user_ids_to_mentions(not_punished_users).join(", ");
+        let response = format!(
+            ":warning: **Failed to kick members:** {}\n",
+            not_punished_mentions
+        );
+        message.push_str(&response);
+    }
+
+    if !reason.is_empty() {
+        let response = format!(":information: **Kick reason:** {}", reason);
+        message.push_str(&response);
+    }
+
+    if message.is_empty() {
+        message.push_str("Failed to execute kick command!");
+    }
+
+    ctx.reply(format!("{message}")).await?;
     Ok(())
 }
 
@@ -56,7 +92,6 @@ pub async fn timeout(
     time: i64,
     unit: TimeUnit,
 ) -> Result<(), Error> {
-    // TODO: merge timeout punishment and infraction into one function
     ctx.defer_ephemeral().await?;
     let users_str = users.as_str();
     let mut user_ids: Vec<UserId> = user_ids_from(users_str);
@@ -120,7 +155,6 @@ pub async fn untimeout(ctx: Context<'_>, users: String) -> Result<(), Error> {
     category = "Moderation"
 )]
 pub async fn ban(ctx: Context<'_>, users: String, reason: String) -> Result<(), Error> {
-    // TODO: merge ban punishment and infraction into one function
     ctx.defer_ephemeral().await?;
     let users_str = users.as_str();
     let mut user_ids: Vec<UserId> = user_ids_from(users_str);
@@ -241,7 +275,7 @@ pub async fn punish(
             strike_users(ctx, &mut user_ids, message, Some(infraction.id)).await?
         }
         Punishment::Kick => {
-            kick_users(ctx, guild_id, &mut user_ids, message, Some(infraction.id)).await?
+            kick_users(ctx, guild_id, &mut user_ids, &message, Some(infraction.id)).await?
         }
     };
 
@@ -276,14 +310,14 @@ async fn kick_users(
     ctx: Context<'_>,
     guild_id: GuildId,
     user_ids: &mut Vec<UserId>,
-    reason: String,
+    reason: &str,
     infraction: Option<i32>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut kicked = vec![];
     let mut not_kicked = vec![];
 
     for user_id in user_ids.iter() {
-        match guild_id.kick_with_reason(&ctx, user_id, &reason).await {
+        match guild_id.kick_with_reason(&ctx, user_id, reason).await {
             Ok(_) => {
                 kicked.push(*user_id);
                 match infraction {
