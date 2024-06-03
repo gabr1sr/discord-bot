@@ -272,8 +272,13 @@ pub async fn unban(ctx: Context<'_>, users: String) -> Result<(), Error> {
 )]
 pub async fn strike(ctx: Context<'_>, users: String, reason: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let users_str = users.as_str();
-    let mut user_ids: Vec<UserId> = user_ids_from(users_str);
+    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+
+    if user_ids.is_empty() {
+        ctx.reply("You must provide at least 1 valid user mention or user ID.")
+            .await?;
+        return Ok(());
+    }
 
     if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
         ctx.reply("One of the users have a role higher than yours.")
@@ -281,9 +286,39 @@ pub async fn strike(ctx: Context<'_>, users: String, reason: String) -> Result<(
         return Ok(());
     }
 
-    let result = strike_users(ctx, &mut user_ids, reason, None).await?;
-    let res = punish_response(result);
-    ctx.reply(res).await?;
+    let (punished_users, not_punished_users) =
+        strike_users(ctx, &mut user_ids, &reason, None).await?;
+
+    let mut message = String::new();
+
+    if !punished_users.is_empty() {
+        let punished_mentions = user_ids_to_mentions(punished_users).join(", ");
+        let response = format!(
+            ":white_check_mark: **Successfully striked members:** {}\n",
+            punished_mentions
+        );
+        message.push_str(&response);
+    }
+
+    if !not_punished_users.is_empty() {
+        let not_punished_mentions = user_ids_to_mentions(not_punished_users).join(", ");
+        let response = format!(
+            ":warning: **Failed to strike members:** {}\n",
+            not_punished_mentions
+        );
+        message.push_str(&response);
+    }
+
+    if !reason.is_empty() {
+        let response = format!(":information: **Strike reason:** {}", reason);
+        message.push_str(&response);
+    }
+
+    if message.is_empty() {
+        message.push_str("Failed to execute strike command!");
+    }
+
+    ctx.reply(message).await?;
     Ok(())
 }
 
@@ -343,7 +378,7 @@ pub async fn punish(
             .await?
         }
         Punishment::Strike => {
-            strike_users(ctx, &mut user_ids, message, Some(infraction.id)).await?
+            strike_users(ctx, &mut user_ids, &message, Some(infraction.id)).await?
         }
         Punishment::Kick => {
             kick_users(ctx, guild_id, &mut user_ids, &message, Some(infraction.id)).await?
@@ -529,7 +564,7 @@ async fn timeout_users(
 async fn strike_users(
     ctx: Context<'_>,
     user_ids: &mut Vec<UserId>,
-    reason: String,
+    reason: &str,
     infraction: Option<i32>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut striked = vec![];
@@ -537,7 +572,7 @@ async fn strike_users(
     for user_id in user_ids.iter() {
         match user_id.create_dm_channel(&ctx).await {
             Ok(channel) => {
-                let res = format!("You received a strike:\n{}", &reason);
+                let res = format!("You received a strike:\n{}", reason);
                 match channel.say(&ctx, res).await {
                     Ok(_) => (),
                     Err(_) => (),
