@@ -253,12 +253,40 @@ pub async fn ban(ctx: Context<'_>, users: String, reason: String) -> Result<(), 
 )]
 pub async fn unban(ctx: Context<'_>, users: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let users_str = users.as_str();
-    let mut user_ids: Vec<UserId> = user_ids_from(users_str);
+    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+
+    if user_ids.is_empty() {
+        ctx.reply("You must provide at least 1 valid user mention or user ID.")
+            .await?;
+        return Ok(());
+    }
+
     let guild_id = ctx.guild_id().unwrap();
-    let result = unban_users(ctx, guild_id, &mut user_ids).await?;
-    let res = unpunish_response(result);
-    ctx.reply(res).await?;
+    let (unpunished_users, not_unpunished_users) =
+        unban_users(ctx, guild_id, &mut user_ids).await?;
+
+    let mut message = String::new();
+
+    if !unpunished_users.is_empty() {
+        let mentions = user_ids_to_mentions(unpunished_users).join(", ");
+        let res = format!(
+            ":white_check_mark: **Successfully unbanned members:** {}\n",
+            mentions
+        );
+        message.push_str(&res);
+    }
+
+    if !not_unpunished_users.is_empty() {
+        let mentions = user_ids_to_mentions(not_unpunished_users).join(", ");
+        let res = format!(":warning: **Failed to unban members:** {}\n", mentions);
+        message.push_str(&res);
+    }
+
+    if message.is_empty() {
+        message.push_str("Failed to execute unban command!");
+    }
+
+    ctx.reply(message).await?;
     Ok(())
 }
 
