@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use crate::models::{InfractionModel, Punishment, Severity};
+use crate::models::Punishment;
 use crate::utils::user_ids_from;
 use crate::{Context, Error};
 use serenity::all::GuildId;
@@ -385,32 +385,26 @@ pub async fn strike(ctx: Context<'_>, users: String, reason: String) -> Result<(
     required_permissions = "KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS",
     category = "Moderation"
 )]
-pub async fn punish(
-    ctx: Context<'_>,
-    id: i32,
-    users: String,
-    message: String,
-) -> Result<(), Error> {
+pub async fn punish(ctx: Context<'_>, id: i32, users: String, reason: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let users_str = users.as_str();
-    let mut user_ids: Vec<UserId> = user_ids_from(users_str);
+    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+
+    if user_ids.is_empty() {
+        ctx.reply("You must provide at least 1 valid user mention or user ID.")
+            .await?;
+        return Ok(());
+    }
 
     let guild_id = ctx.guild_id().unwrap();
 
-    let result = sqlx::query_as!(
-        InfractionModel,
-        r#"SELECT id, severity AS "severity!: Severity", punishment AS "punishment!: Punishment", duration FROM infractions WHERE id = $1"#,
-        id
-    )
-        .fetch_one(&ctx.data().database.pool)
-        .await;
+    let infraction = ctx.data().database.get_infraction(id).await;
 
-    if let Err(_) = result {
+    if let Err(_) = infraction {
         ctx.reply("This infraction ID doesn't exists!").await?;
         return Ok(());
     }
 
-    let infraction = result.unwrap();
+    let infraction = infraction.unwrap();
 
     if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
         ctx.reply("One of the users have a role higher than yours.")
@@ -418,9 +412,9 @@ pub async fn punish(
         return Ok(());
     }
 
-    let result = match infraction.punishment {
+    let (punished_users, not_punished_users) = match infraction.punishment {
         Punishment::Ban => {
-            ban_users(ctx, guild_id, &mut user_ids, &message, Some(infraction.id)).await?
+            ban_users(ctx, guild_id, &mut user_ids, &reason, Some(infraction.id)).await?
         }
         Punishment::Timeout => {
             timeout_users(
@@ -433,15 +427,53 @@ pub async fn punish(
             .await?
         }
         Punishment::Strike => {
-            strike_users(ctx, &mut user_ids, &message, Some(infraction.id)).await?
+            strike_users(ctx, &mut user_ids, &reason, Some(infraction.id)).await?
         }
         Punishment::Kick => {
-            kick_users(ctx, guild_id, &mut user_ids, &message, Some(infraction.id)).await?
+            kick_users(ctx, guild_id, &mut user_ids, &reason, Some(infraction.id)).await?
         }
     };
 
-    let res = punish_response(result);
-    ctx.reply(res).await?;
+    let mut message = String::new();
+
+    if !punished_users.is_empty() {
+        let punished_mentions = user_ids_to_mentions(punished_users).join(", ");
+        let response = format!(
+            ":white_check_mark: **Successfully punished members:** {}\n",
+            punished_mentions
+        );
+        message.push_str(&response);
+    }
+
+    if !not_punished_users.is_empty() {
+        let not_punished_mentions = user_ids_to_mentions(not_punished_users).join(", ");
+        let response = format!(
+            ":warning: **Failed to punish members:** {}\n",
+            not_punished_mentions
+        );
+        message.push_str(&response);
+    }
+
+    let punishment_type = format!("{:?}", infraction.punishment).to_lowercase();
+    let response = format!(":information: **Punishment type:** {:?}\n", punishment_type);
+    message.push_str(&response);
+
+    if infraction.duration > 0 {
+        let duration = format!("{}", infraction.duration).to_lowercase();
+        let response = format!(":information: **Punishment duration:** {:?}\n", duration);
+        message.push_str(&response);
+    }
+
+    if !reason.is_empty() {
+        let response = format!(":information: **Punishment reason:** {}", reason);
+        message.push_str(&response);
+    }
+
+    if message.is_empty() {
+        message.push_str("Failed to execute punish command!");
+    }
+
+    ctx.reply(message).await?;
     Ok(())
 }
 
@@ -673,17 +705,6 @@ async fn assert_highest_role(ctx: &Context<'_>, user_ids: &mut Vec<UserId>) -> R
     }
 
     Ok(true)
-}
-
-fn punish_response((punished_users, not_punished_users): (Vec<UserId>, Vec<UserId>)) -> String {
-    let punished_mentions = user_ids_to_mentions(punished_users);
-    let not_punished_mentions = user_ids_to_mentions(not_punished_users);
-
-    format!(
-        "Punished users: {}\nNot punished users: {}",
-        punished_mentions.join(", "),
-        not_punished_mentions.join(", ")
-    )
 }
 
 fn user_ids_to_mentions(user_ids: Vec<UserId>) -> Vec<String> {

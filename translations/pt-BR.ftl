@@ -107,8 +107,8 @@ punish = punish
      .id-description = ID da infração
      .users = users
      .users-description = Usuários que serão punidos
-     .message = message
-     .message-description = Motivo para punir os usuários
+     .reason = reason
+     .reason-description = Motivo para punir os usuários
 
 tag = tag
     .description = Comando de tag
