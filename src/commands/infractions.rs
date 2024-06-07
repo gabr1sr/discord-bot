@@ -31,7 +31,7 @@ pub async fn add(
     ctx.defer_ephemeral().await?;
 
     if let Ok(_) = ctx.data().database.get_infraction(id).await {
-        ctx.reply(format!("Infraction ID {id} already exists!"))
+        ctx.reply(format!(":warning: Infraction ID `{id}` already exists!"))
             .await?;
         return Ok(());
     }
@@ -43,11 +43,12 @@ pub async fn add(
         .await
     {
         let data = format_infraction(infraction);
-        ctx.reply(format!("Infraction created!\n{data}")).await?;
+        ctx.reply(format!(":white_check_mark: Infraction created!\n{data}"))
+            .await?;
         return Ok(());
     }
 
-    ctx.reply(format!("Failed to create infraction ID {id}!"))
+    ctx.reply(format!(":x: Failed to create infraction ID `{id}`!"))
         .await?;
     Ok(())
 }
@@ -189,7 +190,7 @@ fn format_infraction(
     }: InfractionModel,
 ) -> String {
     format!(
-        "ID: {}\nSeverity: {:?}\nPunishment: {:?}\nDuration: {}\r\n",
+        ":information_source: ID: {}\n:information_source: Severity: {:?}\n:information_source: Punishment: {:?}\n:information_source: Duration: {}\r\n",
         id, severity, punishment, duration
     )
 }
