@@ -99,16 +99,17 @@ pub async fn remove(ctx: Context<'_>, id: i32) -> Result<(), Error> {
 
     if let Ok(result) = ctx.data().database.remove_infraction(id).await {
         let res = match result.rows_affected() {
-            0 => "No infraction removed!".to_owned(),
-            1 => "Infraction removed successfully!".to_owned(),
-            _ => "Infractions removed successfully!".to_owned(),
+            0 => format!(":warning: There is no infraction ID `{id}`!"),
+            1 => format!(":white_check_mark: Infraction ID `{id}` removed successfully!"),
+            _ => format!(":white_check_mark: Infractions ID `{id}` removed successfully!"),
         };
 
         ctx.reply(res).await?;
         return Ok(());
     }
 
-    ctx.reply(format!("Failed to remove infraction!")).await?;
+    ctx.reply(format!(":x: Failed to remove infraction ID `{id}`!"))
+        .await?;
     Ok(())
 }
 
