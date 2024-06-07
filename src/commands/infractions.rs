@@ -65,7 +65,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 
     if let Ok(infractions) = ctx.data().database.get_infractions().await {
         let res = if infractions.is_empty() {
-            "No infractions in table!".to_owned()
+            ":x: No infractions found!".to_owned()
         } else {
             infractions
                 .iter()
@@ -83,7 +83,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
         return Ok(());
     }
 
-    ctx.reply(format!("No infractions found!")).await?;
+    ctx.reply(":x: No infractions found!").await?;
     Ok(())
 }
 
