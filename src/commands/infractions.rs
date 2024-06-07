@@ -130,7 +130,8 @@ pub async fn edit(
     ctx.defer_ephemeral().await?;
 
     if let Err(_) = ctx.data().database.get_infraction(id).await {
-        ctx.reply("This infraction doesn't exists!").await?;
+        ctx.reply(format!(":warning: Infraction ID `{id}` doesn't exist!"))
+            .await?;
         return Ok(());
     }
 
@@ -140,11 +141,15 @@ pub async fn edit(
         .update_infraction(id, severity, punishment, duration)
         .await
     {
-        ctx.reply("Infraction updated with success!").await?;
+        ctx.reply(format!(
+            ":white_check_mark: Infraction ID `{id}` updated with success!"
+        ))
+        .await?;
         return Ok(());
     }
 
-    ctx.reply("Failed to edit infraction!").await?;
+    ctx.reply(format!(":x: Failed to edit infraction ID `{id}`!"))
+        .await?;
     Ok(())
 }
 
