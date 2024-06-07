@@ -165,14 +165,17 @@ pub async fn user(ctx: Context<'_>, member: UserId) -> Result<(), Error> {
 
     if let Ok(infractions) = ctx.data().database.get_user_infractions(member).await {
         let res = if infractions.is_empty() {
-            "User has no infractions!".to_owned()
+            ":x: User has no infractions!".to_owned()
         } else {
             infractions
                 .iter()
                 .map(|i| {
                     format!(
-                        "- ID: `{}` | User ID: `{}` | Infraction ID: `{}` | Created At: `{:?}`",
-                        i.id, i.user_id, i.infraction_id, i.created_at
+                        "- ID: `{}` | User ID: `{}` | Infraction ID: `{}` | Created At: `{}`",
+                        i.id,
+                        i.user_id,
+                        i.infraction_id,
+                        i.created_at.unwrap()
                     )
                 })
                 .collect::<Vec<String>>()
@@ -183,7 +186,7 @@ pub async fn user(ctx: Context<'_>, member: UserId) -> Result<(), Error> {
         return Ok(());
     }
 
-    ctx.reply("User has no infractions!").await?;
+    ctx.reply(":x: User has no infractions!").await?;
     Ok(())
 }
 
