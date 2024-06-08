@@ -275,4 +275,14 @@ impl Database {
             .fetch_all(&self.pool)
             .await
     }
+
+    pub async fn get_user_tags(&self, user_id: UserId) -> Result<Vec<TagModel>, Error> {
+        sqlx::query_as!(
+            TagModel,
+            r#"SELECT * FROM tags WHERE user_id = $1"#,
+            user_id.to_string()
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
 }

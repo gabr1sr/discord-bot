@@ -105,15 +105,8 @@ fn parse_tag_names(tags: &[TagModel]) -> String {
 pub async fn user(ctx: Context<'_>, user: User) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
-    let res = match sqlx::query_as!(
-        TagModel,
-        r#"SELECT * FROM tags WHERE user_id = $1"#,
-        user.id.to_string(),
-    )
-    .fetch_all(&ctx.data().database.pool)
-    .await
-    {
-        Err(_) => format!("User has no tags!"),
+    let res = match ctx.data().database.get_user_tags(user.id).await {
+        Err(_) => format!(":x: User has no tags!"),
         Ok(tags) => parse_tag_names(&tags),
     };
 
