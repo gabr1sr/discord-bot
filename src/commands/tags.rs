@@ -118,28 +118,22 @@ pub async fn user(ctx: Context<'_>, user: User) -> Result<(), Error> {
 pub async fn remove(ctx: Context<'_>, name: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
-    if let Err(_) = sqlx::query_as!(TagModel, r#"SELECT * FROM tags WHERE name = $1"#, name)
-        .fetch_one(&ctx.data().database.pool)
-        .await
-    {
-        let res = format!("Tag `{name}` doesn't exists!");
-        ctx.reply(res).await?;
+    if let Err(_) = ctx.data().database.get_tag(&name).await {
+        ctx.reply(format!(":x: Tag `{name}` doesn't exists!"))
+            .await?;
         return Ok(());
     }
 
-    let res = match sqlx::query_as!(
-        TagModel,
-        r#"DELETE FROM tags WHERE user_id = $1 AND name = $2"#,
-        ctx.author().id.to_string(),
-        name
-    )
-    .execute(&ctx.data().database.pool)
-    .await
-    .unwrap()
-    .rows_affected()
+    let res = match ctx
+        .data()
+        .database
+        .remove_tag(&name, ctx.author().id)
+        .await
+        .unwrap()
+        .rows_affected()
     {
-        1 => format!("Tag `{name}` deleted!"),
-        _ => format!("You're not the owner of the tag `{name}`!"),
+        1 => format!(":white_check_mark: Tag `{name}` deleted!"),
+        _ => format!(":x: You're not the owner of the tag `{name}`!"),
     };
 
     ctx.reply(res).await?;

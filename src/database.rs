@@ -285,4 +285,14 @@ impl Database {
         .fetch_all(&self.pool)
         .await
     }
+
+    pub async fn remove_tag(&self, name: &str, user_id: UserId) -> Result<PgQueryResult, Error> {
+        sqlx::query!(
+            "DELETE FROM tags WHERE name = $1 AND user_id = $2",
+            name,
+            user_id.to_string()
+        )
+        .execute(&self.pool)
+        .await
+    }
 }
