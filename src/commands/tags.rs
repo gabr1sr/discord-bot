@@ -45,19 +45,18 @@ pub async fn add(ctx: Context<'_>, name: String, content: String) -> Result<(), 
 pub async fn edit(ctx: Context<'_>, name: String, content: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
-    let res =
-        match sqlx::query_as!(
-            TagModel,
-            r#"UPDATE tags SET content = $1 WHERE user_id = $2 AND name = $3 RETURNING id, user_id, name, content"#,
-            content,
-            ctx.author().id.to_string(),
-            name
-        )
-            .fetch_one(&ctx.data().database.pool)
-            .await {
-                Err(_) => format!("Tag `{name}` doesn't exists or you're not the owner of this tag!"),
-                Ok(tag) => format!("Content of the tag `{}` updated successfully!", tag.name),
-            };
+    let res = match ctx
+        .data()
+        .database
+        .update_tag(&name, &content, ctx.author().id)
+        .await
+    {
+        Err(_) => format!(":x: Tag `{name}` doesn't exist or you're not the owner of it!"),
+        Ok(tag) => format!(
+            ":white_check_mark: Content of the tag `{}` updated successfully!",
+            tag.name
+        ),
+    };
 
     ctx.reply(res).await?;
     Ok(())

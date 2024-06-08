@@ -252,4 +252,21 @@ impl Database {
             .fetch_one(&self.pool)
             .await
     }
+
+    pub async fn update_tag(
+        &self,
+        name: &str,
+        content: &str,
+        user_id: UserId,
+    ) -> Result<TagModel, Error> {
+        sqlx::query_as!(
+            TagModel,
+            r#"UPDATE tags SET content = $1 WHERE user_id = $2 AND name = $3 RETURNING id, user_id, name, content"#,
+            content,
+            user_id.to_string(),
+            name
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
 }
