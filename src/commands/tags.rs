@@ -66,11 +66,8 @@ pub async fn edit(ctx: Context<'_>, name: String, content: String) -> Result<(),
 pub async fn see(ctx: Context<'_>, name: String) -> Result<(), Error> {
     ctx.defer().await?;
 
-    let res = match sqlx::query_as!(TagModel, r#"SELECT * FROM tags WHERE name = $1"#, name)
-        .fetch_one(&ctx.data().database.pool)
-        .await
-    {
-        Err(_) => format!("Tag `{name}` doesn't exists!"),
+    let res = match ctx.data().database.get_tag(&name).await {
+        Err(_) => format!(":x: Tag `{name}` doesn't exists!"),
         Ok(tag) => tag.content,
     };
 
