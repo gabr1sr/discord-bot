@@ -79,11 +79,8 @@ pub async fn see(ctx: Context<'_>, name: String) -> Result<(), Error> {
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
-    let res = match sqlx::query_as!(TagModel, r#"SELECT * FROM tags"#)
-        .fetch_all(&ctx.data().database.pool)
-        .await
-    {
-        Err(_) => format!("Server has no tags!"),
+    let res = match ctx.data().database.get_all_tags().await {
+        Err(_) => format!(":x: Server has no tags!"),
         Ok(tags) => parse_tag_names(&tags),
     };
 
@@ -93,11 +90,14 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 
 fn parse_tag_names(tags: &[TagModel]) -> String {
     if tags.is_empty() {
-        return "No tags!".to_string();
+        return ":x: No tags!".to_owned();
     }
 
-    let mut names = Vec::new();
-    names.extend(tags.iter().map(|t| format!("- {}", t.name)));
+    let mut names = vec![];
+    names.extend(
+        tags.iter()
+            .map(|t| format!("- `{}` - <@{}>", t.name, t.user_id)),
+    );
     names.join("\n")
 }
 
