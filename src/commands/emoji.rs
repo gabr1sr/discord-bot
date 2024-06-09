@@ -1,4 +1,5 @@
 use crate::{Context, Error};
+use poise::samples::paginate;
 use serenity::builder::CreateAttachment;
 use serenity::model::channel::Attachment;
 use serenity::model::guild::Emoji;
@@ -28,17 +29,16 @@ pub async fn see(ctx: Context<'_>, emoji: Emoji) -> Result<(), Error> {
     guild_only
 )]
 pub async fn add(ctx: Context<'_>, name: String, attachment: Attachment) -> Result<(), Error> {
-    let guild_id = ctx.guild_id().unwrap();
-
     let data = attachment.download().await?;
     let builder = CreateAttachment::bytes(data, name.clone());
+    let guild_id = ctx.guild_id().unwrap();
 
     let res = match guild_id
         .create_emoji(&ctx, &name, &builder.to_base64())
         .await
     {
-        Err(_) => format!("Failed to create emoji `{name}`"),
-        Ok(emoji) => format!("Emoji created: {}", emoji),
+        Err(_) => format!(":x: Failed to create emoji `{name}`"),
+        Ok(emoji) => format!(":white_check_mark: Emoji created: {}", emoji),
     };
 
     ctx.reply(res).await?;
@@ -51,27 +51,30 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 
     let guild_id = ctx.guild_id().unwrap();
 
-    let res = match guild_id.emojis(&ctx).await {
-        Err(_) => format!("Failed to retrieve server emojis!"),
-        Ok(emojis) => parse_emojis_list(&emojis),
-    };
+    if let Ok(emojis) = guild_id.emojis(&ctx).await {
+        if emojis.is_empty() {
+            ctx.reply(":warning: Server has no emojis!").await?;
+            return Ok(());
+        }
 
-    ctx.reply(res).await?;
-    Ok(())
-}
+        let emojis_vec = emojis
+            .into_iter()
+            .map(|e| format!("- <:{}:{}> `{}`\n", e.name, e.id.get().to_string(), e.name))
+            .collect::<Vec<_>>();
 
-fn parse_emojis_list(emojis: &[Emoji]) -> String {
-    if emojis.is_empty() {
-        return "No emojis!".to_string();
+        let chunks = emojis_vec
+            .chunks(10)
+            .map(|c| c.join("\n"))
+            .collect::<Vec<_>>();
+
+        let pages: Vec<&str> = chunks.iter().map(|s| s.as_ref()).collect();
+
+        paginate(ctx, &pages).await?;
+        return Ok(());
     }
 
-    let mut lines = Vec::new();
-    lines.extend(
-        emojis
-            .iter()
-            .map(|e| format!("- <:{}:{}> `{}`", e.name, e.id.get().to_string(), e.name)),
-    );
-    lines.join("\n")
+    ctx.reply(":x: Failed to retrieve server emojis!").await?;
+    Ok(())
 }
 
 #[poise::command(
@@ -83,8 +86,11 @@ fn parse_emojis_list(emojis: &[Emoji]) -> String {
 )]
 pub async fn remove(ctx: Context<'_>, emoji: Emoji) -> Result<(), Error> {
     let res = match emoji.delete(&ctx).await {
-        Err(_) => format!("Failed to delete emoji `{}`", emoji.name),
-        Ok(()) => format!("Emoji `{}` deleted with success!", emoji.name),
+        Err(_) => format!(":x: Failed to delete emoji `{}`", emoji.name),
+        Ok(()) => format!(
+            ":white_check_mark: Emoji `{}` deleted with success!",
+            emoji.name
+        ),
     };
 
     ctx.reply(res).await?;

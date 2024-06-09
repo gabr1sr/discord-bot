@@ -1,5 +1,5 @@
 use crate::models::{
-    AnimalModel, BangPointModel, InfractionModel, Punishment, PunishmentModel, Severity,
+    AnimalModel, BangPointModel, InfractionModel, Punishment, PunishmentModel, Severity, TagModel,
     UserInfractionModel,
 };
 use serenity::all::UserId;
@@ -227,6 +227,72 @@ impl Database {
             user_id.get().to_string()
         )
         .fetch_all(&self.pool)
+        .await
+    }
+
+    pub async fn get_tag(&self, name: &str) -> Result<TagModel, Error> {
+        sqlx::query_as!(TagModel, r#"SELECT * FROM tags WHERE name = $1"#, name)
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    pub async fn add_tag(
+        &self,
+        name: &str,
+        content: &str,
+        user_id: UserId,
+    ) -> Result<TagModel, Error> {
+        sqlx::query_as!(
+            TagModel,
+            r#"INSERT INTO tags (user_id, name, content) VALUES ($1, $2, $3) RETURNING id, user_id, name, content"#,
+            user_id.to_string(),
+            name,
+            content
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    pub async fn update_tag(
+        &self,
+        name: &str,
+        content: &str,
+        user_id: UserId,
+    ) -> Result<TagModel, Error> {
+        sqlx::query_as!(
+            TagModel,
+            r#"UPDATE tags SET content = $1 WHERE user_id = $2 AND name = $3 RETURNING id, user_id, name, content"#,
+            content,
+            user_id.to_string(),
+            name
+        )
+            .fetch_one(&self.pool)
+            .await
+    }
+
+    pub async fn get_all_tags(&self) -> Result<Vec<TagModel>, Error> {
+        sqlx::query_as!(TagModel, r#"SELECT * FROM tags"#)
+            .fetch_all(&self.pool)
+            .await
+    }
+
+    pub async fn get_user_tags(&self, user_id: UserId) -> Result<Vec<TagModel>, Error> {
+        sqlx::query_as!(
+            TagModel,
+            r#"SELECT * FROM tags WHERE user_id = $1"#,
+            user_id.to_string()
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    pub async fn remove_tag(&self, name: &str, user_id: UserId) -> Result<PgQueryResult, Error> {
+        sqlx::query!(
+            "DELETE FROM tags WHERE name = $1 AND user_id = $2",
+            name,
+            user_id.to_string()
+        )
+        .execute(&self.pool)
         .await
     }
 }

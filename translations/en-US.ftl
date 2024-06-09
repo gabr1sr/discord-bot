@@ -107,8 +107,8 @@ punish = punish
      .id-description = Infraction ID
      .users = users
      .users-description = Users to be punished
-     .message = message
-     .message-description = Reason to punish users
+     .reason = reason
+     .reason-description = Reason to punish users
 
 tag = tag
     .description = Tag command

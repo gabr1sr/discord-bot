@@ -17,31 +17,27 @@ pub async fn tag(_: Context<'_>) -> Result<(), Error> {
 pub async fn add(ctx: Context<'_>, name: String, content: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
-    if let Ok(_) = sqlx::query_as!(TagModel, r#"SELECT * FROM tags WHERE name = $1"#, name)
-        .fetch_one(&ctx.data().database.pool)
-        .await
-    {
-        let res = format!("Tag `{name}` already exists!");
-        ctx.reply(res).await?;
+    if let Ok(_) = ctx.data().database.get_tag(&name).await {
+        ctx.reply(format!(":warning: Tag `{name}` already exists!"))
+            .await?;
         return Ok(());
     }
 
-    if let Ok(tag) = sqlx::query_as!(
-        TagModel,
-        r#"INSERT INTO tags (user_id, name, content) VALUES ($1, $2, $3) RETURNING id, user_id, name, content"#,
-        ctx.author().id.to_string(),
-        name,
-        content
-    )
-        .fetch_one(&ctx.data().database.pool)
-        .await {
-            let res = format!("Tag `{}` created with success! ID: `{}`", tag.name, tag.id);
-            ctx.reply(res).await?;
-            return Ok(());
+    if let Ok(tag) = ctx
+        .data()
+        .database
+        .add_tag(&name, &content, ctx.author().id)
+        .await
+    {
+        ctx.reply(format!(
+            ":white_check_mark: Tag `{}` created with success!",
+            tag.name
+        ))
+        .await?;
+        return Ok(());
     }
 
-    let res = format!("Cannot create tag {name}!");
-    ctx.reply(res).await?;
+    ctx.reply(format!(":x: Cannot create tag {name}!")).await?;
     Ok(())
 }
 
@@ -49,19 +45,18 @@ pub async fn add(ctx: Context<'_>, name: String, content: String) -> Result<(), 
 pub async fn edit(ctx: Context<'_>, name: String, content: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
-    let res =
-        match sqlx::query_as!(
-            TagModel,
-            r#"UPDATE tags SET content = $1 WHERE user_id = $2 AND name = $3 RETURNING id, user_id, name, content"#,
-            content,
-            ctx.author().id.to_string(),
-            name
-        )
-            .fetch_one(&ctx.data().database.pool)
-            .await {
-                Err(_) => format!("Tag `{name}` doesn't exists or you're not the owner of this tag!"),
-                Ok(tag) => format!("Content of the tag `{}` updated successfully!", tag.name),
-            };
+    let res = match ctx
+        .data()
+        .database
+        .update_tag(&name, &content, ctx.author().id)
+        .await
+    {
+        Err(_) => format!(":x: Tag `{name}` doesn't exist or you're not the owner of it!"),
+        Ok(tag) => format!(
+            ":white_check_mark: Content of the tag `{}` updated successfully!",
+            tag.name
+        ),
+    };
 
     ctx.reply(res).await?;
     Ok(())
@@ -71,11 +66,8 @@ pub async fn edit(ctx: Context<'_>, name: String, content: String) -> Result<(),
 pub async fn see(ctx: Context<'_>, name: String) -> Result<(), Error> {
     ctx.defer().await?;
 
-    let res = match sqlx::query_as!(TagModel, r#"SELECT * FROM tags WHERE name = $1"#, name)
-        .fetch_one(&ctx.data().database.pool)
-        .await
-    {
-        Err(_) => format!("Tag `{name}` doesn't exists!"),
+    let res = match ctx.data().database.get_tag(&name).await {
+        Err(_) => format!(":x: Tag `{name}` doesn't exists!"),
         Ok(tag) => tag.content,
     };
 
@@ -87,11 +79,8 @@ pub async fn see(ctx: Context<'_>, name: String) -> Result<(), Error> {
 pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
-    let res = match sqlx::query_as!(TagModel, r#"SELECT * FROM tags"#)
-        .fetch_all(&ctx.data().database.pool)
-        .await
-    {
-        Err(_) => format!("Server has no tags!"),
+    let res = match ctx.data().database.get_all_tags().await {
+        Err(_) => format!(":x: Server has no tags!"),
         Ok(tags) => parse_tag_names(&tags),
     };
 
@@ -101,11 +90,14 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 
 fn parse_tag_names(tags: &[TagModel]) -> String {
     if tags.is_empty() {
-        return "No tags!".to_string();
+        return ":x: No tags!".to_owned();
     }
 
-    let mut names = Vec::new();
-    names.extend(tags.iter().map(|t| format!("- {}", t.name)));
+    let mut names = vec![];
+    names.extend(
+        tags.iter()
+            .map(|t| format!("- `{}` - <@{}>", t.name, t.user_id)),
+    );
     names.join("\n")
 }
 
@@ -113,15 +105,8 @@ fn parse_tag_names(tags: &[TagModel]) -> String {
 pub async fn user(ctx: Context<'_>, user: User) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
-    let res = match sqlx::query_as!(
-        TagModel,
-        r#"SELECT * FROM tags WHERE user_id = $1"#,
-        user.id.to_string(),
-    )
-    .fetch_all(&ctx.data().database.pool)
-    .await
-    {
-        Err(_) => format!("User has no tags!"),
+    let res = match ctx.data().database.get_user_tags(user.id).await {
+        Err(_) => format!(":x: User has no tags!"),
         Ok(tags) => parse_tag_names(&tags),
     };
 
@@ -133,28 +118,22 @@ pub async fn user(ctx: Context<'_>, user: User) -> Result<(), Error> {
 pub async fn remove(ctx: Context<'_>, name: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
-    if let Err(_) = sqlx::query_as!(TagModel, r#"SELECT * FROM tags WHERE name = $1"#, name)
-        .fetch_one(&ctx.data().database.pool)
-        .await
-    {
-        let res = format!("Tag `{name}` doesn't exists!");
-        ctx.reply(res).await?;
+    if let Err(_) = ctx.data().database.get_tag(&name).await {
+        ctx.reply(format!(":x: Tag `{name}` doesn't exists!"))
+            .await?;
         return Ok(());
     }
 
-    let res = match sqlx::query_as!(
-        TagModel,
-        r#"DELETE FROM tags WHERE user_id = $1 AND name = $2"#,
-        ctx.author().id.to_string(),
-        name
-    )
-    .execute(&ctx.data().database.pool)
-    .await
-    .unwrap()
-    .rows_affected()
+    let res = match ctx
+        .data()
+        .database
+        .remove_tag(&name, ctx.author().id)
+        .await
+        .unwrap()
+        .rows_affected()
     {
-        1 => format!("Tag `{name}` deleted!"),
-        _ => format!("You're not the owner of the tag `{name}`!"),
+        1 => format!(":white_check_mark: Tag `{name}` deleted!"),
+        _ => format!(":x: You're not the owner of the tag `{name}`!"),
     };
 
     ctx.reply(res).await?;
