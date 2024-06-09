@@ -82,8 +82,11 @@ fn parse_emojis_list(emojis: &[Emoji]) -> String {
 )]
 pub async fn remove(ctx: Context<'_>, emoji: Emoji) -> Result<(), Error> {
     let res = match emoji.delete(&ctx).await {
-        Err(_) => format!("Failed to delete emoji `{}`", emoji.name),
-        Ok(()) => format!("Emoji `{}` deleted with success!", emoji.name),
+        Err(_) => format!(":x: Failed to delete emoji `{}`", emoji.name),
+        Ok(()) => format!(
+            ":white_check_mark: Emoji `{}` deleted with success!",
+            emoji.name
+        ),
     };
 
     ctx.reply(res).await?;
