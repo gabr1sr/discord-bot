@@ -28,17 +28,16 @@ pub async fn see(ctx: Context<'_>, emoji: Emoji) -> Result<(), Error> {
     guild_only
 )]
 pub async fn add(ctx: Context<'_>, name: String, attachment: Attachment) -> Result<(), Error> {
-    let guild_id = ctx.guild_id().unwrap();
-
     let data = attachment.download().await?;
     let builder = CreateAttachment::bytes(data, name.clone());
+    let guild_id = ctx.guild_id().unwrap();
 
     let res = match guild_id
         .create_emoji(&ctx, &name, &builder.to_base64())
         .await
     {
-        Err(_) => format!("Failed to create emoji `{name}`"),
-        Ok(emoji) => format!("Emoji created: {}", emoji),
+        Err(_) => format!(":x: Failed to create emoji `{name}`"),
+        Ok(emoji) => format!(":white_check_mark: Emoji created: {}", emoji),
     };
 
     ctx.reply(res).await?;
