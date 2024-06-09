@@ -1,4 +1,5 @@
 use crate::{Context, Error};
+use poise::samples::paginate;
 use serenity::builder::CreateAttachment;
 use serenity::model::channel::Attachment;
 use serenity::model::guild::Emoji;
@@ -50,27 +51,30 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
 
     let guild_id = ctx.guild_id().unwrap();
 
-    let res = match guild_id.emojis(&ctx).await {
-        Err(_) => format!("Failed to retrieve server emojis!"),
-        Ok(emojis) => parse_emojis_list(&emojis),
-    };
+    if let Ok(emojis) = guild_id.emojis(&ctx).await {
+        if emojis.is_empty() {
+            ctx.reply(":warning: Server has no emojis!").await?;
+            return Ok(());
+        }
 
-    ctx.reply(res).await?;
-    Ok(())
-}
+        let emojis_vec = emojis
+            .into_iter()
+            .map(|e| format!("- <:{}:{}> `{}`\n", e.name, e.id.get().to_string(), e.name))
+            .collect::<Vec<_>>();
 
-fn parse_emojis_list(emojis: &[Emoji]) -> String {
-    if emojis.is_empty() {
-        return "No emojis!".to_string();
+        let chunks = emojis_vec
+            .chunks(10)
+            .map(|c| c.join("\n"))
+            .collect::<Vec<_>>();
+
+        let pages: Vec<&str> = chunks.iter().map(|s| s.as_ref()).collect();
+
+        paginate(ctx, &pages).await?;
+        return Ok(());
     }
 
-    let mut lines = Vec::new();
-    lines.extend(
-        emojis
-            .iter()
-            .map(|e| format!("- <:{}:{}> `{}`", e.name, e.id.get().to_string(), e.name)),
-    );
-    lines.join("\n")
+    ctx.reply(":x: Failed to retrieve server emojis!").await?;
+    Ok(())
 }
 
 #[poise::command(
