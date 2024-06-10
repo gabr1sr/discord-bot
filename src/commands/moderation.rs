@@ -6,7 +6,7 @@ use crate::{Context, Error};
 use serenity::all::GuildId;
 use serenity::builder::EditMember;
 use serenity::model::id::UserId;
-use sqlx::types::chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
+use sqlx::types::chrono::{DateTime, FixedOffset, Utc};
 
 #[derive(poise::ChoiceParameter, Debug)]
 enum TimeUnit {
@@ -34,7 +34,7 @@ pub async fn kick(ctx: Context<'_>, users: String, reason: String) -> Result<(),
         return Ok(());
     }
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
         return Ok(());
@@ -101,7 +101,7 @@ pub async fn timeout(
         return Ok(());
     }
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
         return Ok(());
@@ -174,7 +174,7 @@ pub async fn untimeout(ctx: Context<'_>, users: String) -> Result<(), Error> {
         return Ok(());
     }
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
         return Ok(());
@@ -227,7 +227,7 @@ pub async fn ban(ctx: Context<'_>, users: String, reason: String) -> Result<(), 
         return Ok(());
     }
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
         return Ok(());
@@ -335,7 +335,7 @@ pub async fn strike(ctx: Context<'_>, users: String, reason: String) -> Result<(
         return Ok(());
     }
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
         return Ok(());
@@ -406,7 +406,7 @@ pub async fn punish(ctx: Context<'_>, id: i32, users: String, reason: String) ->
 
     let infraction = infraction.unwrap();
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
         return Ok(());
@@ -483,8 +483,7 @@ fn to_iso8601(duration: i64) -> String {
     let timestamp_now = datetime_now.timestamp();
 
     let timestamp = timestamp_now + duration;
-    let naive_datetime: NaiveDateTime = NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap();
-    let datetime: DateTime<Utc> = DateTime::from_naive_utc_and_offset(naive_datetime, Utc);
+    let datetime: DateTime<Utc> = DateTime::from_timestamp(timestamp, 0).unwrap();
 
     datetime.to_rfc3339()
 }
@@ -689,22 +688,21 @@ async fn strike_users(
     Ok((striked, vec![]))
 }
 
-async fn assert_highest_role(ctx: &Context<'_>, user_ids: &mut Vec<UserId>) -> Result<bool, Error> {
-    let author_member = ctx.author_member().await.unwrap();
-    let (_, author_role_position) = author_member.highest_role_info(ctx).unwrap();
+fn check_greater_hierarchy(ctx: &Context<'_>, caller: UserId, users: &[UserId]) -> Option<UserId> {
+    let guild = ctx.guild().unwrap();
 
-    let guild_id = ctx.guild_id().unwrap();
+    for user_id in users.iter() {
+        let result = match guild.greater_member_hierarchy(&ctx, caller, user_id) {
+            Some(id) => caller == id,
+            None => false,
+        };
 
-    for user_id in user_ids.iter() {
-        let member = guild_id.member(&ctx, user_id).await.unwrap();
-
-        return Ok(match member.highest_role_info(&ctx) {
-            Some((_, member_role_position)) => author_role_position >= member_role_position,
-            None => true,
-        });
+        if !result {
+            return None;
+        }
     }
 
-    Ok(true)
+    Some(caller)
 }
 
 fn user_ids_to_mentions(user_ids: Vec<UserId>) -> Vec<String> {

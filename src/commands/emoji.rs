@@ -85,7 +85,9 @@ pub async fn list(ctx: Context<'_>) -> Result<(), Error> {
     guild_only
 )]
 pub async fn remove(ctx: Context<'_>, emoji: Emoji) -> Result<(), Error> {
-    let res = match emoji.delete(&ctx).await {
+    let guild_id = ctx.guild_id().unwrap();
+
+    let res = match guild_id.delete_emoji(&ctx, &emoji).await {
         Err(_) => format!(":x: Failed to delete emoji `{}`", emoji.name),
         Ok(()) => format!(
             ":white_check_mark: Emoji `{}` deleted with success!",
