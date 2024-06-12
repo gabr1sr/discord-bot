@@ -12,9 +12,11 @@ use tokio::sync::Mutex;
 #[poise::command(slash_command, prefix_command, category = "Bang")]
 pub async fn startbang(ctx: Context<'_>, channel: ChannelId) -> Result<(), Error> {
     ctx.defer().await?;
-    let mut bang_channel = ctx.data().bang_channel.lock().await;
-    *bang_channel = channel.get();
-    drop(bang_channel);
+
+    {
+        let mut bang_channel = ctx.data().bang_channel.lock().await;
+        *bang_channel = channel.get();
+    }
 
     let mut handles = ctx.data().bang_handles.lock().await;
     let bang_available = Arc::clone(&ctx.data().bang_available);

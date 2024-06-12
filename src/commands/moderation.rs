@@ -1,11 +1,11 @@
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use crate::models::Punishment;
 use crate::utils::user_ids_from;
 use crate::{Context, Error};
-use serenity::all::GuildId;
+use serenity::all::{ChannelId, EditChannel, GuildId, Http};
 use serenity::builder::EditMember;
-use serenity::model::id::UserId;
+use serenity::model::{channel::GuildChannel, id::UserId};
 use sqlx::types::chrono::{DateTime, FixedOffset, Utc};
 
 #[derive(poise::ChoiceParameter, Debug)]
@@ -474,6 +474,59 @@ pub async fn punish(ctx: Context<'_>, id: i32, users: String, reason: String) ->
     }
 
     ctx.reply(message).await?;
+    Ok(())
+}
+
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    required_permissions = "MANAGE_CHANNELS",
+    category = "Moderation"
+)]
+pub async fn slowmode(
+    ctx: Context<'_>,
+    #[max = 21600] // max = 6 hours
+    seconds: u16,
+    channel: Option<GuildChannel>,
+    #[max = 86400] // max = 24 hours
+    duration: Option<u64>,
+) -> Result<(), Error> {
+    let mut channel = match channel {
+        Some(channel) => channel,
+        None => ctx.guild_channel().await.unwrap(),
+    };
+
+    let builder = EditChannel::new().rate_limit_per_user(seconds);
+
+    let res = match channel.edit(&ctx, builder).await {
+        Ok(_) => format!(":white_check_mark: Slowmode of `{seconds}` seconds enabled with success on channel {channel}!"),
+        Err(_) => format!(":x: Failed to enable slowmode on channel {channel}!")
+    };
+
+    ctx.reply(res).await?;
+
+    if let Some(duration) = duration {
+        tokio::spawn(remove_slowmode_after(channel.id, duration));
+    }
+
+    Ok(())
+}
+
+async fn remove_slowmode_after(channel_id: ChannelId, duration: u64) -> Result<(), Error> {
+    #[derive(serde::Serialize)]
+    struct SlowModeChannel {
+        rate_limit_per_user: u16,
+    }
+
+    tokio::time::sleep(Duration::from_secs(duration)).await;
+
+    let token = std::env::var("DISCORD_TOKEN").unwrap();
+    let http = Http::new(&token);
+    let map = SlowModeChannel {
+        rate_limit_per_user: 0,
+    };
+    http.edit_channel(channel_id, &map, None).await?;
     Ok(())
 }
 

@@ -600,6 +600,7 @@ dependencies = [
  "poise",
  "rand",
  "regex",
+ "serde",
  "serenity",
  "sqlx",
  "tokio",
