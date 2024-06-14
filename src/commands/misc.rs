@@ -1,4 +1,3 @@
-use crate::utils::user_ids_from;
 use crate::{Context, Error};
 
 use crate::translation::tr;
@@ -19,13 +18,5 @@ pub async fn database(ctx: Context<'_>) -> Result<(), Error> {
 
     let res = format!("Value: {}", row.0);
     ctx.reply(res).await?;
-    Ok(())
-}
-
-#[poise::command(slash_command, prefix_command, category = "Misc")]
-pub async fn kinash(ctx: Context<'_>, users: String) -> Result<(), Error> {
-    let user_ids = user_ids_from(&users);
-    dbg!(user_ids);
-    ctx.reply("Check console").await?;
     Ok(())
 }

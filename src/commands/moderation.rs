@@ -3,7 +3,10 @@ use std::time::{Duration, SystemTime};
 use crate::models::Punishment;
 use crate::utils::user_ids_from;
 use crate::{Context, Error};
-use serenity::all::{ChannelId, EditChannel, GuildId, Http};
+use serenity::all::{
+    ChannelId, EditChannel, GuildId, Http, PermissionOverwrite, PermissionOverwriteType,
+    Permissions, RoleId,
+};
 use serenity::builder::EditMember;
 use serenity::model::{channel::GuildChannel, id::UserId};
 use sqlx::types::chrono::{DateTime, FixedOffset, Utc};
@@ -492,11 +495,7 @@ pub async fn slowmode(
     #[max = 86400] // max = 24 hours
     duration: Option<u64>,
 ) -> Result<(), Error> {
-    let mut channel = match channel {
-        Some(channel) => channel,
-        None => ctx.guild_channel().await.unwrap(),
-    };
-
+    let mut channel = channel.unwrap_or(ctx.guild_channel().await.unwrap());
     let builder = EditChannel::new().rate_limit_per_user(seconds);
 
     let res = match channel.edit(&ctx, builder).await {
@@ -527,6 +526,57 @@ async fn remove_slowmode_after(channel_id: ChannelId, duration: u64) -> Result<(
         rate_limit_per_user: 0,
     };
     http.edit_channel(channel_id, &map, None).await?;
+    Ok(())
+}
+
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    required_permissions = "MANAGE_CHANNELS",
+    required_bot_permissions = "MANAGE_CHANNELS",
+    category = "Moderation"
+)]
+pub async fn lock(ctx: Context<'_>, channel: Option<GuildChannel>) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let channel = channel.unwrap_or(ctx.guild_channel().await.unwrap());
+
+    let permission_types = channel
+        .permission_overwrites
+        .iter()
+        .map(|ov| ov.kind)
+        .collect::<Vec<_>>();
+
+    for permission_type in permission_types.into_iter() {
+        channel
+            .delete_permission(ctx.http(), permission_type)
+            .await?;
+    }
+
+    let allow = Permissions::empty();
+
+    let deny = Permissions::SEND_MESSAGES
+        | Permissions::SEND_TTS_MESSAGES
+        | Permissions::ADD_REACTIONS
+        | Permissions::SEND_MESSAGES_IN_THREADS
+        | Permissions::CREATE_PUBLIC_THREADS
+        | Permissions::CREATE_PRIVATE_THREADS;
+
+    let kind = {
+        let guild_id = ctx.guild_id().unwrap();
+        let role_id = RoleId::new(guild_id.get());
+        PermissionOverwriteType::Role(role_id)
+    };
+
+    let permissions = PermissionOverwrite { allow, deny, kind };
+
+    let res = match channel.create_permission(ctx.http(), permissions).await {
+        Ok(()) => format!(":white_check_mark: Channel {channel} locked with success!"),
+        Err(_) => format!(":x: Failed to lock channel {channel}!"),
+    };
+
+    ctx.reply(res).await?;
     Ok(())
 }
 
