@@ -1,12 +1,15 @@
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use crate::models::Punishment;
 use crate::utils::user_ids_from;
 use crate::{Context, Error};
-use serenity::all::GuildId;
+use serenity::all::{
+    ChannelId, EditChannel, GetMessages, GuildId, Http, PermissionOverwrite,
+    PermissionOverwriteType, Permissions, RoleId,
+};
 use serenity::builder::EditMember;
-use serenity::model::id::UserId;
-use sqlx::types::chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
+use serenity::model::{channel::GuildChannel, id::UserId};
+use sqlx::types::chrono::{DateTime, FixedOffset, Utc};
 
 #[derive(poise::ChoiceParameter, Debug)]
 enum TimeUnit {
@@ -26,42 +29,49 @@ enum TimeUnit {
 )]
 pub async fn kick(ctx: Context<'_>, users: String, reason: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+
+    let user_ids: Vec<UserId> = user_ids_from(&users);
 
     if users.is_empty() || user_ids.is_empty() {
         ctx.reply("You must provide at least 1 valid user mention or user ID.")
             .await?;
+
         return Ok(());
     }
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
+
         return Ok(());
     }
 
     let guild_id = ctx.guild_id().unwrap();
 
     let (punished_users, not_punished_users) =
-        kick_users(ctx, guild_id, &mut user_ids, &reason, None).await?;
+        kick_users(ctx, guild_id, user_ids, &reason, None).await?;
 
     let mut message = String::new();
 
     if !punished_users.is_empty() {
         let punished_mentions = user_ids_to_mentions(punished_users).join(", ");
+
         let response = format!(
             ":white_check_mark: **Successfully kicked members:** {}\n",
             punished_mentions
         );
+
         message.push_str(&response);
     }
 
     if !not_punished_users.is_empty() {
         let not_punished_mentions = user_ids_to_mentions(not_punished_users).join(", ");
+
         let response = format!(
             ":warning: **Failed to kick members:** {}\n",
             not_punished_mentions
         );
+
         message.push_str(&response);
     }
 
@@ -93,17 +103,20 @@ pub async fn timeout(
     unit: TimeUnit,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+
+    let user_ids: Vec<UserId> = user_ids_from(&users);
 
     if user_ids.is_empty() {
         ctx.reply("You must provide at least 1 valid user mention or user ID.")
             .await?;
+
         return Ok(());
     }
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
+
         return Ok(());
     }
 
@@ -119,26 +132,31 @@ pub async fn timeout(
 
     let duration = to_iso8601(duration_i64);
     let guild_id = ctx.guild_id().unwrap();
+
     let (punished_users, not_punished_users) =
-        timeout_users(ctx, guild_id, &mut user_ids, duration, None).await?;
+        timeout_users(ctx, guild_id, user_ids, duration, None).await?;
 
     let mut message = String::new();
 
     if !punished_users.is_empty() {
         let punished_mentions = user_ids_to_mentions(punished_users).join(", ");
+
         let response = format!(
             ":white_check_mark: **Successfully timed out members:** {}\n",
             punished_mentions
         );
+
         message.push_str(&response);
     }
 
     if !not_punished_users.is_empty() {
         let not_punished_mentions = user_ids_to_mentions(not_punished_users).join(", ");
+
         let response = format!(
             ":warning: **Failed to time out members:** {}\n",
             not_punished_mentions
         );
+
         message.push_str(&response);
     }
 
@@ -166,32 +184,37 @@ pub async fn timeout(
 )]
 pub async fn untimeout(ctx: Context<'_>, users: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+
+    let user_ids: Vec<UserId> = user_ids_from(&users);
 
     if user_ids.is_empty() {
         ctx.reply("You must provide at least 1 valid user mention or user ID.")
             .await?;
+
         return Ok(());
     }
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
+
         return Ok(());
     }
 
     let guild_id = ctx.guild_id().unwrap();
-    let (unpunished_users, not_unpunished_users) =
-        untimeout_users(ctx, guild_id, &mut user_ids).await?;
+
+    let (unpunished_users, not_unpunished_users) = untimeout_users(ctx, guild_id, user_ids).await?;
 
     let mut message = String::new();
 
     if !unpunished_users.is_empty() {
         let mentions = user_ids_to_mentions(unpunished_users).join(", ");
+
         let res = format!(
             ":white_check_mark: **Successfully untimedout members:** {}\n",
             mentions
         );
+
         message.push_str(&res);
     }
 
@@ -219,41 +242,49 @@ pub async fn untimeout(ctx: Context<'_>, users: String) -> Result<(), Error> {
 )]
 pub async fn ban(ctx: Context<'_>, users: String, reason: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+
+    let user_ids: Vec<UserId> = user_ids_from(&users);
 
     if user_ids.is_empty() {
         ctx.reply("You must provide at least 1 valid user mention or user ID.")
             .await?;
+
         return Ok(());
     }
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
+
         return Ok(());
     }
 
     let guild_id = ctx.guild_id().unwrap();
+
     let (punished_users, not_punished_users) =
-        ban_users(ctx, guild_id, &mut user_ids, &reason, None).await?;
+        ban_users(ctx, guild_id, user_ids, &reason, None).await?;
 
     let mut message = String::new();
 
     if !punished_users.is_empty() {
         let punished_mentions = user_ids_to_mentions(punished_users).join(", ");
+
         let response = format!(
             ":white_check_mark: **Successfully banned members:** {}\n",
             punished_mentions
         );
+
         message.push_str(&response);
     }
 
     if !not_punished_users.is_empty() {
         let not_punished_mentions = user_ids_to_mentions(not_punished_users).join(", ");
+
         let response = format!(
             ":warning: **Failed to ban members:** {}\n",
             not_punished_mentions
         );
+
         message.push_str(&response);
     }
 
@@ -280,26 +311,30 @@ pub async fn ban(ctx: Context<'_>, users: String, reason: String) -> Result<(), 
 )]
 pub async fn unban(ctx: Context<'_>, users: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+
+    let user_ids: Vec<UserId> = user_ids_from(&users);
 
     if user_ids.is_empty() {
         ctx.reply("You must provide at least 1 valid user mention or user ID.")
             .await?;
+
         return Ok(());
     }
 
     let guild_id = ctx.guild_id().unwrap();
-    let (unpunished_users, not_unpunished_users) =
-        unban_users(ctx, guild_id, &mut user_ids).await?;
+
+    let (unpunished_users, not_unpunished_users) = unban_users(ctx, guild_id, user_ids).await?;
 
     let mut message = String::new();
 
     if !unpunished_users.is_empty() {
         let mentions = user_ids_to_mentions(unpunished_users).join(", ");
+
         let res = format!(
             ":white_check_mark: **Successfully unbanned members:** {}\n",
             mentions
         );
+
         message.push_str(&res);
     }
 
@@ -327,40 +362,46 @@ pub async fn unban(ctx: Context<'_>, users: String) -> Result<(), Error> {
 )]
 pub async fn strike(ctx: Context<'_>, users: String, reason: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+
+    let user_ids: Vec<UserId> = user_ids_from(&users);
 
     if user_ids.is_empty() {
         ctx.reply("You must provide at least 1 valid user mention or user ID.")
             .await?;
+
         return Ok(());
     }
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
+
         return Ok(());
     }
 
-    let (punished_users, not_punished_users) =
-        strike_users(ctx, &mut user_ids, &reason, None).await?;
+    let (punished_users, not_punished_users) = strike_users(ctx, user_ids, &reason, None).await?;
 
     let mut message = String::new();
 
     if !punished_users.is_empty() {
         let punished_mentions = user_ids_to_mentions(punished_users).join(", ");
+
         let response = format!(
             ":white_check_mark: **Successfully striked members:** {}\n",
             punished_mentions
         );
+
         message.push_str(&response);
     }
 
     if !not_punished_users.is_empty() {
         let not_punished_mentions = user_ids_to_mentions(not_punished_users).join(", ");
+
         let response = format!(
             ":warning: **Failed to strike members:** {}\n",
             not_punished_mentions
         );
+
         message.push_str(&response);
     }
 
@@ -387,11 +428,12 @@ pub async fn strike(ctx: Context<'_>, users: String, reason: String) -> Result<(
 )]
 pub async fn punish(ctx: Context<'_>, id: i32, users: String, reason: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let mut user_ids: Vec<UserId> = user_ids_from(&users);
+    let user_ids: Vec<UserId> = user_ids_from(&users);
 
     if user_ids.is_empty() {
         ctx.reply("You must provide at least 1 valid user mention or user ID.")
             .await?;
+
         return Ok(());
     }
 
@@ -406,31 +448,28 @@ pub async fn punish(ctx: Context<'_>, id: i32, users: String, reason: String) ->
 
     let infraction = infraction.unwrap();
 
-    if !assert_highest_role(&ctx, &mut user_ids).await.unwrap() {
+    if let None = check_greater_hierarchy(&ctx, ctx.author().id, &user_ids) {
         ctx.reply("One of the users have a role higher than yours.")
             .await?;
+
         return Ok(());
     }
 
     let (punished_users, not_punished_users) = match infraction.punishment {
-        Punishment::Ban => {
-            ban_users(ctx, guild_id, &mut user_ids, &reason, Some(infraction.id)).await?
-        }
+        Punishment::Ban => ban_users(ctx, guild_id, user_ids, &reason, Some(infraction.id)).await?,
         Punishment::Timeout => {
             timeout_users(
                 ctx,
                 guild_id,
-                &mut user_ids,
+                user_ids,
                 to_iso8601(infraction.duration),
                 Some(infraction.id),
             )
             .await?
         }
-        Punishment::Strike => {
-            strike_users(ctx, &mut user_ids, &reason, Some(infraction.id)).await?
-        }
+        Punishment::Strike => strike_users(ctx, user_ids, &reason, Some(infraction.id)).await?,
         Punishment::Kick => {
-            kick_users(ctx, guild_id, &mut user_ids, &reason, Some(infraction.id)).await?
+            kick_users(ctx, guild_id, user_ids, &reason, Some(infraction.id)).await?
         }
     };
 
@@ -438,19 +477,23 @@ pub async fn punish(ctx: Context<'_>, id: i32, users: String, reason: String) ->
 
     if !punished_users.is_empty() {
         let punished_mentions = user_ids_to_mentions(punished_users).join(", ");
+
         let response = format!(
             ":white_check_mark: **Successfully punished members:** {}\n",
             punished_mentions
         );
+
         message.push_str(&response);
     }
 
     if !not_punished_users.is_empty() {
         let not_punished_mentions = user_ids_to_mentions(not_punished_users).join(", ");
+
         let response = format!(
             ":warning: **Failed to punish members:** {}\n",
             not_punished_mentions
         );
+
         message.push_str(&response);
     }
 
@@ -477,14 +520,155 @@ pub async fn punish(ctx: Context<'_>, id: i32, users: String, reason: String) ->
     Ok(())
 }
 
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    required_permissions = "MANAGE_CHANNELS",
+    category = "Moderation"
+)]
+pub async fn slowmode(
+    ctx: Context<'_>,
+    #[max = 21600] // max = 6 hours
+    seconds: u16,
+    channel: Option<GuildChannel>,
+    #[max = 86400] // max = 24 hours
+    duration: Option<u64>,
+) -> Result<(), Error> {
+    let mut channel = channel.unwrap_or(ctx.guild_channel().await.unwrap());
+    let builder = EditChannel::new().rate_limit_per_user(seconds);
+
+    let res = match channel.edit(&ctx, builder).await {
+        Ok(_) => format!(":white_check_mark: Slowmode of `{seconds}` seconds enabled with success on channel {channel}!"),
+        Err(_) => format!(":x: Failed to enable slowmode on channel {channel}!")
+    };
+
+    ctx.reply(res).await?;
+
+    if let Some(duration) = duration {
+        tokio::spawn(remove_slowmode_after(channel.id, duration));
+    }
+
+    Ok(())
+}
+
+async fn remove_slowmode_after(channel_id: ChannelId, duration: u64) -> Result<(), Error> {
+    #[derive(serde::Serialize)]
+    struct SlowModeChannel {
+        rate_limit_per_user: u16,
+    }
+
+    tokio::time::sleep(Duration::from_secs(duration)).await;
+
+    let token = std::env::var("DISCORD_TOKEN").unwrap();
+    let http = Http::new(&token);
+
+    let map = SlowModeChannel {
+        rate_limit_per_user: 0,
+    };
+
+    http.edit_channel(channel_id, &map, None).await?;
+    Ok(())
+}
+
+#[poise::command(
+    slash_command,
+    prefix_command,
+    guild_only,
+    required_permissions = "MANAGE_CHANNELS",
+    required_bot_permissions = "MANAGE_CHANNELS",
+    category = "Moderation"
+)]
+pub async fn lock(ctx: Context<'_>, channel: Option<GuildChannel>) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let channel = channel.unwrap_or(ctx.guild_channel().await.unwrap());
+
+    let permission_types = channel
+        .permission_overwrites
+        .iter()
+        .map(|ov| ov.kind)
+        .collect::<Vec<_>>();
+
+    for permission_type in permission_types.into_iter() {
+        channel
+            .delete_permission(ctx.http(), permission_type)
+            .await?;
+    }
+
+    let allow = Permissions::empty();
+
+    let deny = Permissions::SEND_MESSAGES
+        | Permissions::SEND_TTS_MESSAGES
+        | Permissions::ADD_REACTIONS
+        | Permissions::SEND_MESSAGES_IN_THREADS
+        | Permissions::CREATE_PUBLIC_THREADS
+        | Permissions::CREATE_PRIVATE_THREADS;
+
+    let kind = {
+        let guild_id = ctx.guild_id().unwrap();
+        let role_id = RoleId::new(guild_id.get());
+        PermissionOverwriteType::Role(role_id)
+    };
+
+    let permissions = PermissionOverwrite { allow, deny, kind };
+
+    let res = match channel.create_permission(ctx.http(), permissions).await {
+        Ok(()) => format!(":white_check_mark: Channel {channel} locked with success!"),
+        Err(_) => format!(":x: Failed to lock channel {channel}!"),
+    };
+
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    slash_command,
+    guild_only,
+    required_permissions = "MANAGE_MESSAGES",
+    required_bot_permissions = "MANAGE_MESSAGES",
+    category = "Moderation"
+)]
+pub async fn clear(
+    ctx: Context<'_>,
+    #[max = 100]
+    #[min = 1]
+    amount: u8,
+    channel: Option<GuildChannel>,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let channel = channel.unwrap_or(ctx.guild_channel().await.unwrap());
+    let builder = GetMessages::new().limit(amount);
+    let messages = channel.messages(&ctx, builder).await;
+
+    if let Err(_) = messages {
+        ctx.reply(":warning: No messages found!").await?;
+        return Ok(());
+    }
+
+    let messages = messages.unwrap();
+    let amount = messages.len();
+
+    if let Err(_) = channel.delete_messages(&ctx.http(), messages).await {
+        ctx.reply(":x: No messages deleted!").await?;
+        return Ok(());
+    }
+
+    ctx.reply(format!(
+        ":white_check_mark: `{amount}` messages were deleted from the channel {channel}!"
+    ))
+    .await?;
+    Ok(())
+}
+
 fn to_iso8601(duration: i64) -> String {
     let now = SystemTime::now();
     let datetime_now: DateTime<Utc> = now.into();
     let timestamp_now = datetime_now.timestamp();
 
     let timestamp = timestamp_now + duration;
-    let naive_datetime: NaiveDateTime = NaiveDateTime::from_timestamp_opt(timestamp, 0).unwrap();
-    let datetime: DateTime<Utc> = DateTime::from_naive_utc_and_offset(naive_datetime, Utc);
+    let datetime: DateTime<Utc> = DateTime::from_timestamp(timestamp, 0).unwrap();
 
     datetime.to_rfc3339()
 }
@@ -502,17 +686,16 @@ fn from_iso8601(duration: String) -> i64 {
 async fn kick_users(
     ctx: Context<'_>,
     guild_id: GuildId,
-    user_ids: &mut Vec<UserId>,
+    user_ids: impl IntoIterator<Item = UserId>,
     reason: &str,
     infraction: Option<i32>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut kicked = vec![];
     let mut not_kicked = vec![];
 
-    for user_id in user_ids.iter() {
-        match guild_id.kick_with_reason(&ctx, user_id, reason).await {
+    for user_id in user_ids.into_iter() {
+        match guild_id.kick_with_reason(&ctx, &user_id, reason).await {
             Ok(_) => {
-                kicked.push(*user_id);
                 match infraction {
                     Some(id) => {
                         ctx.data()
@@ -527,8 +710,10 @@ async fn kick_users(
                             .await?;
                     }
                 };
+
+                kicked.push(user_id);
             }
-            Err(_) => not_kicked.push(*user_id),
+            Err(_) => not_kicked.push(user_id),
         };
     }
 
@@ -538,17 +723,16 @@ async fn kick_users(
 async fn ban_users(
     ctx: Context<'_>,
     guild_id: GuildId,
-    user_ids: &mut Vec<UserId>,
+    user_ids: impl IntoIterator<Item = UserId>,
     reason: &str,
     infraction: Option<i32>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut banned = vec![];
     let mut not_banned = vec![];
 
-    for user_id in user_ids.iter() {
-        match guild_id.ban_with_reason(&ctx, user_id, 0, reason).await {
+    for user_id in user_ids.into_iter() {
+        match guild_id.ban_with_reason(&ctx, &user_id, 0, reason).await {
             Ok(_) => {
-                banned.push(*user_id);
                 match infraction {
                     Some(id) => {
                         ctx.data()
@@ -563,8 +747,10 @@ async fn ban_users(
                             .await?;
                     }
                 };
+
+                banned.push(user_id);
             }
-            Err(_) => not_banned.push(*user_id),
+            Err(_) => not_banned.push(user_id),
         };
     }
 
@@ -574,15 +760,15 @@ async fn ban_users(
 async fn unban_users(
     ctx: Context<'_>,
     guild_id: GuildId,
-    user_ids: &mut Vec<UserId>,
+    user_ids: impl IntoIterator<Item = UserId>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut unbanned = Vec::new();
     let mut not_unbanned = Vec::new();
 
-    for user_id in user_ids.iter() {
+    for user_id in user_ids.into_iter() {
         match guild_id.unban(&ctx, user_id).await {
-            Ok(_) => unbanned.push(*user_id),
-            Err(_) => not_unbanned.push(*user_id),
+            Ok(_) => unbanned.push(user_id),
+            Err(_) => not_unbanned.push(user_id),
         };
     }
 
@@ -592,17 +778,17 @@ async fn unban_users(
 async fn untimeout_users(
     ctx: Context<'_>,
     guild_id: GuildId,
-    user_ids: &mut Vec<UserId>,
+    user_ids: impl IntoIterator<Item = UserId>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut untimedout = Vec::new();
     let mut not_untimedout = Vec::new();
 
-    for user_id in user_ids.iter() {
+    for user_id in user_ids.into_iter() {
         let builder = EditMember::new().enable_communication();
 
-        match guild_id.edit_member(&ctx, *user_id, builder).await {
-            Ok(_) => untimedout.push(*user_id),
-            Err(_) => not_untimedout.push(*user_id),
+        match guild_id.edit_member(&ctx, user_id, builder).await {
+            Ok(_) => untimedout.push(user_id),
+            Err(_) => not_untimedout.push(user_id),
         };
     }
 
@@ -612,7 +798,7 @@ async fn untimeout_users(
 async fn timeout_users(
     ctx: Context<'_>,
     guild_id: GuildId,
-    user_ids: &mut Vec<UserId>,
+    user_ids: impl IntoIterator<Item = UserId>,
     duration: String,
     infraction: Option<i32>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
@@ -620,12 +806,11 @@ async fn timeout_users(
     let mut not_timedout = vec![];
     let duration_i64 = from_iso8601(duration.clone());
 
-    for user_id in user_ids.iter() {
+    for user_id in user_ids.into_iter() {
         let builder = EditMember::new().disable_communication_until(duration.clone());
 
-        match guild_id.edit_member(&ctx, *user_id, builder).await {
+        match guild_id.edit_member(&ctx, user_id, builder).await {
             Ok(_) => {
-                timedout.push(*user_id);
                 match infraction {
                     Some(id) => {
                         ctx.data()
@@ -640,8 +825,10 @@ async fn timeout_users(
                             .await?;
                     }
                 };
+
+                timedout.push(user_id);
             }
-            Err(_) => not_timedout.push(*user_id),
+            Err(_) => not_timedout.push(user_id),
         };
     }
 
@@ -650,13 +837,13 @@ async fn timeout_users(
 
 async fn strike_users(
     ctx: Context<'_>,
-    user_ids: &mut Vec<UserId>,
+    user_ids: impl IntoIterator<Item = UserId>,
     reason: &str,
     infraction: Option<i32>,
 ) -> Result<(Vec<UserId>, Vec<UserId>), Error> {
     let mut striked = vec![];
 
-    for user_id in user_ids.iter() {
+    for user_id in user_ids.into_iter() {
         match user_id.create_dm_channel(&ctx).await {
             Ok(channel) => {
                 let res = format!("You received a strike:\n{}", reason);
@@ -683,28 +870,27 @@ async fn strike_users(
             }
         };
 
-        striked.push(*user_id);
+        striked.push(user_id);
     }
 
     Ok((striked, vec![]))
 }
 
-async fn assert_highest_role(ctx: &Context<'_>, user_ids: &mut Vec<UserId>) -> Result<bool, Error> {
-    let author_member = ctx.author_member().await.unwrap();
-    let (_, author_role_position) = author_member.highest_role_info(ctx).unwrap();
+fn check_greater_hierarchy(ctx: &Context<'_>, caller: UserId, users: &[UserId]) -> Option<UserId> {
+    let guild = ctx.guild().unwrap();
 
-    let guild_id = ctx.guild_id().unwrap();
+    for user_id in users.iter() {
+        let result = match guild.greater_member_hierarchy(&ctx, caller, user_id) {
+            Some(id) => caller == id,
+            None => false,
+        };
 
-    for user_id in user_ids.iter() {
-        let member = guild_id.member(&ctx, user_id).await.unwrap();
-
-        return Ok(match member.highest_role_info(&ctx) {
-            Some((_, member_role_position)) => author_role_position >= member_role_position,
-            None => true,
-        });
+        if !result {
+            return None;
+        }
     }
 
-    Ok(true)
+    Some(caller)
 }
 
 fn user_ids_to_mentions(user_ids: Vec<UserId>) -> Vec<String> {

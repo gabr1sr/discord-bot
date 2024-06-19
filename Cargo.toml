@@ -16,3 +16,4 @@ tracing = { version = "0.1.40", features = ["log"] }
 sqlx = { version = "0.7", features = [ "postgres", "chrono", "runtime-async-std", "tls-rustls" ] }
 regex = "1.10.3"
 rand = "0.8.5"
+serde = { version = "1.0.203", features = ["derive"] }

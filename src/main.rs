@@ -72,7 +72,10 @@ async fn main() {
         commands::bang::stopbang(),
         commands::bang::ranking(),
         commands::animal::animal(),
-        commands::misc::kinash(),
+        commands::moderation::slowmode(),
+        commands::moderation::lock(),
+        commands::misc::experimental(),
+        commands::moderation::clear(),
     ];
 
     let translations = translation::read_ftl().expect("failed to read translation files");
