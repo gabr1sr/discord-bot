@@ -4,8 +4,8 @@ use crate::models::Punishment;
 use crate::utils::user_ids_from;
 use crate::{Context, Error};
 use serenity::all::{
-    ChannelId, EditChannel, GuildId, Http, PermissionOverwrite, PermissionOverwriteType,
-    Permissions, RoleId,
+    ChannelId, EditChannel, GetMessages, GuildId, Http, PermissionOverwrite,
+    PermissionOverwriteType, Permissions, RoleId,
 };
 use serenity::builder::EditMember;
 use serenity::model::{channel::GuildChannel, id::UserId};
@@ -619,6 +619,46 @@ pub async fn lock(ctx: Context<'_>, channel: Option<GuildChannel>) -> Result<(),
     };
 
     ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    slash_command,
+    guild_only,
+    required_permissions = "MANAGE_MESSAGES",
+    required_bot_permissions = "MANAGE_MESSAGES",
+    category = "Moderation"
+)]
+pub async fn clear(
+    ctx: Context<'_>,
+    #[max = 100]
+    #[min = 1]
+    amount: u8,
+    channel: Option<GuildChannel>,
+) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let channel = channel.unwrap_or(ctx.guild_channel().await.unwrap());
+    let builder = GetMessages::new().limit(amount);
+    let messages = channel.messages(&ctx, builder).await;
+
+    if let Err(_) = messages {
+        ctx.reply(":warning: No messages found!").await?;
+        return Ok(());
+    }
+
+    let messages = messages.unwrap();
+    let amount = messages.len();
+
+    if let Err(_) = channel.delete_messages(&ctx.http(), messages).await {
+        ctx.reply(":x: No messages deleted!").await?;
+        return Ok(());
+    }
+
+    ctx.reply(format!(
+        ":white_check_mark: `{amount}` messages were deleted from the channel {channel}!"
+    ))
+    .await?;
     Ok(())
 }
 

@@ -74,6 +74,8 @@ async fn main() {
         commands::animal::animal(),
         commands::moderation::slowmode(),
         commands::moderation::lock(),
+        commands::misc::experimental(),
+        commands::moderation::clear(),
     ];
 
     let translations = translation::read_ftl().expect("failed to read translation files");
