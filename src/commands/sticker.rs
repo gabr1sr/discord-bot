@@ -1,4 +1,4 @@
-use serenity::all::{Attachment, CreateAttachment, CreateSticker, Sticker};
+use serenity::all::{Attachment, CreateAttachment, CreateSticker, Message, Sticker};
 
 use crate::{Context, Error};
 
@@ -88,6 +88,20 @@ pub async fn show(
     }
 
     let sticker = sticker.unwrap();
-    ctx.reply(sticker.image_url().unwrap()).await?;
+    ctx.reply(format!("{}?size=2048", sticker.image_url().unwrap()))
+        .await?;
+    Ok(())
+}
+
+#[poise::command(context_menu_command = "Get sticker image")]
+pub async fn context_get_sticker(ctx: Context<'_>, message: Message) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let res = match message.sticker_items.first() {
+        None => ":x: No sticker found in the message!".to_owned(),
+        Some(sticker_item) => format!("{}?size=2048", sticker_item.image_url().unwrap()),
+    };
+
+    ctx.reply(res).await?;
     Ok(())
 }

@@ -76,6 +76,7 @@ async fn main() {
         commands::moderation::lock(),
         commands::moderation::clear(),
         commands::sticker::sticker(),
+        commands::sticker::context_get_sticker(),
     ];
 
     let translations = translation::read_ftl().expect("failed to read translation files");
