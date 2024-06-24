@@ -169,13 +169,17 @@ async fn handle_argument_parse_error(
         error
     );
 
+    let mut res = String::new();
+
     // TODO: make argument parse error handler send message back to user
     // downcast errors, match them and handle into different functions
     // add a new handle when creating a new command
     if let Ok(error) = error.downcast::<EmojiParseError>() {
-        argument_parse::handle_emoji_parse_error(error, input, ctx).await?;
+        res = argument_parse::handle_emoji_parse_error(error, input, ctx).await?;
     }
 
+    let builder = CreateReply::default().content(res).ephemeral(true);
+    ctx.send(builder).await?;
     Ok(())
 }
 
