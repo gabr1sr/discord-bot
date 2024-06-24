@@ -4,7 +4,7 @@ use serenity::all::{Attachment, CreateAttachment};
 
 #[poise::command(
     slash_command,
-    subcommands("show", "add"),
+    subcommands("show", "add", "remove"),
     subcommand_required,
     category = "Emojis"
 )]
@@ -36,6 +36,24 @@ pub async fn add(ctx: Context<'_>, name: String, attachment: Attachment) -> Resu
     {
         Err(error) => format!(":x: Failed to create emoji `{name}`: {:?}", dbg!(error)),
         Ok(emoji) => format!(":white_check_mark: Emoji `{name}` created with success: {emoji}"),
+    };
+
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    slash_command,
+    required_bot_permissions = "MANAGE_GUILD_EXPRESSIONS",
+    required_permissions = "MANAGE_GUILD_EXPRESSIONS",
+    guild_only
+)]
+pub async fn remove(ctx: Context<'_>, emoji: Emoji) -> Result<(), Error> {
+    let name = &emoji.name;
+
+    let res = match ctx.guild_id().unwrap().delete_emoji(&ctx, &emoji).await {
+        Err(error) => format!(":x: Failed to delete emoji `{name}`: {:?}", dbg!(error)),
+        Ok(()) => format!(":white_check_mark: Emoji `{name}` deleted with success!"),
     };
 
     ctx.reply(res).await?;

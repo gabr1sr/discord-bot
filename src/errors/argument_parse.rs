@@ -8,7 +8,7 @@ pub async fn handle_emoji_parse_error(
 ) -> Result<String, Error> {
     Ok(match *error {
         EmojiParseError::NotFoundOrMalformed => format!(
-            ":x: Failed to parse emoji: `{:?}`",
+            ":x: Emoji not found or malformed: `{}`",
             input.unwrap_or(error.to_string())
         ),
         error => dbg!(error).to_string(),
