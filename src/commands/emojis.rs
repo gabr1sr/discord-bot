@@ -26,17 +26,7 @@ pub async fn show(ctx: Context<'_>, emoji: Emoji) -> Result<(), Error> {
 pub async fn add(ctx: Context<'_>, name: String, attachment: Attachment) -> Result<(), Error> {
     let bytes = attachment.download().await?;
     let builder = CreateAttachment::bytes(bytes, &name);
-
-    let res = match ctx
-        .guild_id()
-        .unwrap()
-        .create_emoji(&ctx, &name, &builder.to_base64())
-        .await
-    {
-        Err(error) => format!(":x: Failed to create emoji `{name}`: {:?}", dbg!(error)),
-        Ok(emoji) => format!(":white_check_mark: Emoji `{name}` created with success: {emoji}"),
-    };
-
+    let res = create_emoji(ctx, &name, &builder.to_base64()).await?;
     ctx.reply(res).await?;
     Ok(())
 }
@@ -95,17 +85,21 @@ pub async fn clone_emoji_context(ctx: Context<'_>, message: Message) -> Result<(
 
     let (name, url) = data.unwrap();
     let builder = CreateAttachment::url(ctx.http(), &url).await?;
-
-    let res = match ctx
-        .guild_id()
-        .unwrap()
-        .create_emoji(&ctx, name, &builder.to_base64())
-        .await
-    {
-        Err(error) => format!(":x: Failed to clone emoji `{name}`: {:?}", dbg!(error)),
-        Ok(emoji) => format!(":white_check_mark: Emoji `{name}` cloned with success: {emoji}"),
-    };
-
+    let res = create_emoji(ctx, &name, &builder.to_base64()).await?;
     ctx.reply(res).await?;
     Ok(())
+}
+
+async fn create_emoji(ctx: Context<'_>, name: &str, image: &str) -> Result<String, Error> {
+    Ok(
+        match ctx
+            .guild_id()
+            .unwrap()
+            .create_emoji(&ctx, name, image)
+            .await
+        {
+            Err(error) => format!(":x: Failed to create emoji `{name}`: {:?}", dbg!(error)),
+            Ok(emoji) => format!(":white_check_mark: Emoji `{name}` created with success: {emoji}"),
+        },
+    )
 }
