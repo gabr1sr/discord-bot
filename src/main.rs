@@ -20,7 +20,10 @@ async fn main() {
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
     let intents = serenity::GatewayIntents::non_privileged();
 
-    let commands = vec![commands::emojis::emoji()];
+    let commands = vec![
+        commands::emojis::emoji(),
+        commands::emojis::retrieve_emoji_context(),
+    ];
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {

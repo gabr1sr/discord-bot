@@ -1,6 +1,5 @@
-use crate::{Context, Error};
-use poise::serenity_prelude::all::Emoji;
-use serenity::all::{Attachment, CreateAttachment};
+use crate::{utils::emoji_identifiers_from, Context, Error};
+use poise::serenity_prelude::all::{Attachment, CreateAttachment, Emoji, Message};
 
 #[poise::command(
     slash_command,
@@ -54,6 +53,24 @@ pub async fn remove(ctx: Context<'_>, emoji: Emoji) -> Result<(), Error> {
     let res = match ctx.guild_id().unwrap().delete_emoji(&ctx, &emoji).await {
         Err(error) => format!(":x: Failed to delete emoji `{name}`: {:?}", dbg!(error)),
         Ok(()) => format!(":white_check_mark: Emoji `{name}` deleted with success!"),
+    };
+
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    context_menu_command = "Retrieve emoji image",
+    required_bot_permissions = "MANAGE_GUILD_EXPRESSIONS",
+    required_permissions = "MANAGE_GUILD_EXPRESSIONS",
+    guild_only
+)]
+pub async fn retrieve_emoji_context(ctx: Context<'_>, message: Message) -> Result<(), Error> {
+    let emojis = emoji_identifiers_from(&message.content);
+
+    let res = match emojis.first() {
+        Some(emoji) => emoji.url(),
+        None => ":x: Failed to retrieve any emoji from the message!".to_owned(),
     };
 
     ctx.reply(res).await?;
