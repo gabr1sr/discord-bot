@@ -22,4 +22,8 @@
   };
 
   cachix.enable = false;
+
+  enterTest = ''
+    cargo test
+  '';
 }
