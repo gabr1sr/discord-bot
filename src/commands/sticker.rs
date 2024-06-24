@@ -105,3 +105,56 @@ pub async fn context_get_sticker(ctx: Context<'_>, message: Message) -> Result<(
     ctx.reply(res).await?;
     Ok(())
 }
+
+#[poise::command(
+    context_menu_command = "Clone sticker",
+    required_permissions = "CREATE_GUILD_EXPRESSIONS",
+    required_bot_permissions = "CREATE_GUILD_EXPRESSIONS",
+    guild_only
+)]
+pub async fn context_clone_sticker(ctx: Context<'_>, message: Message) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let sticker_item = match message.sticker_items.first() {
+        None => None,
+        Some(sticker_item) => Some(sticker_item),
+    };
+
+    if let None = sticker_item {
+        ctx.reply(":x: No sticker found in the message!").await?;
+        return Ok(());
+    }
+
+    let sticker_item = sticker_item.unwrap();
+    let image_url = sticker_item.image_url();
+
+    if let None = image_url {
+        ctx.reply(":x: Failed to retrieve sticker image format!")
+            .await?;
+        return Ok(());
+    }
+
+    let sticker = sticker_item.to_sticker(&ctx.http()).await?;
+    let name = sticker.name;
+    let tags = sticker.tags.join(",");
+    let description = sticker.description.unwrap_or("".to_owned());
+    let url = image_url.unwrap();
+    let attachment = CreateAttachment::url(&ctx.http(), &url).await?;
+
+    let builder = CreateSticker::new(&name, attachment)
+        .tags(&tags)
+        .description(&description);
+
+    let guild_id = ctx.guild_id().unwrap();
+
+    let res = match guild_id.create_sticker(&ctx, builder).await {
+        Err(_) => format!(":x: Failed to create sticker `{name}`!"),
+        Ok(sticker) => format!(
+            ":white_check_mark: Sticker `{}` created with success!",
+            sticker.name
+        ),
+    };
+
+    ctx.reply(res).await?;
+    Ok(())
+}
