@@ -5,7 +5,7 @@ use crate::{Context, Error};
 #[poise::command(
     slash_command,
     prefix_command,
-    subcommands("add", "show"),
+    subcommands("add", "show", "remove"),
     subcommand_required,
     category = "Sticker"
 )]
@@ -90,6 +90,47 @@ pub async fn show(
     let sticker = sticker.unwrap();
     ctx.reply(format!("{}?size=2048", sticker.image_url().unwrap()))
         .await?;
+    Ok(())
+}
+
+#[poise::command(
+    ephemeral,
+    slash_command,
+    prefix_command,
+    required_permissions = "CREATE_GUILD_EXPRESSIONS",
+    required_bot_permissions = "CREATE_GUILD_EXPRESSIONS",
+    guild_only
+)]
+pub async fn remove(ctx: Context<'_>, name: String) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let guild_id = ctx.guild_id().unwrap();
+    let stickers = guild_id.stickers(&ctx.http()).await?;
+
+    if stickers.is_empty() {
+        ctx.reply(":warning: Guild has no stickers!").await?;
+        return Ok(());
+    }
+
+    let filtered: Vec<&Sticker> = stickers.iter().filter(|s| &s.name == &name).collect();
+    let sticker = filtered.first();
+
+    if let None = sticker {
+        ctx.reply(":warning: No sticker found!").await?;
+        return Ok(());
+    }
+
+    let sticker = sticker.unwrap();
+
+    let res = match guild_id.delete_sticker(&ctx.http(), sticker.id).await {
+        Err(_) => format!(":x: Failed to remove sticker `{}`!", sticker.name),
+        Ok(_) => format!(
+            ":white_check_mark: Sticker `{}` removed successfully!",
+            sticker.name
+        ),
+    };
+
+    ctx.reply(res).await?;
     Ok(())
 }
 
