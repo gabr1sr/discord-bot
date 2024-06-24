@@ -8,13 +8,10 @@ pub async fn handle_emoji_parse_error(
     ctx: Context<'_>,
 ) -> Result<(), Error> {
     let res = match *error {
-        EmojiParseError::NotFoundOrMalformed => {
-            if let Some(input) = input {
-                format!(":x: Failed to parse emoji: `{:?}`", input)
-            } else {
-                error.to_string()
-            }
-        }
+        EmojiParseError::NotFoundOrMalformed => format!(
+            ":x: Failed to parse emoji: `{:?}`",
+            input.unwrap_or(error.to_string())
+        ),
         error => dbg!(error).to_string(),
     };
 
