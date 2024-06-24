@@ -23,6 +23,7 @@ async fn main() {
     let commands = vec![
         commands::emojis::emoji(),
         commands::emojis::retrieve_emoji_context(),
+        commands::emojis::clone_emoji_context(),
     ];
 
     let framework = poise::Framework::builder()

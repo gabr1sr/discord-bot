@@ -59,18 +59,51 @@ pub async fn remove(ctx: Context<'_>, emoji: Emoji) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(
-    context_menu_command = "Retrieve emoji image",
-    required_bot_permissions = "MANAGE_GUILD_EXPRESSIONS",
-    required_permissions = "MANAGE_GUILD_EXPRESSIONS",
-    guild_only
-)]
+#[poise::command(context_menu_command = "Retrieve emoji image")]
 pub async fn retrieve_emoji_context(ctx: Context<'_>, message: Message) -> Result<(), Error> {
     let emojis = emoji_identifiers_from(&message.content);
 
     let res = match emojis.first() {
         Some(emoji) => emoji.url(),
         None => ":x: Failed to retrieve any emoji from the message!".to_owned(),
+    };
+
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    context_menu_command = "Clone emoji",
+    required_bot_permissions = "CREATE_GUILD_EXPRESSIONS",
+    required_permissions = "CREATE_GUILD_EXPRESSIONS",
+    guild_only
+)]
+pub async fn clone_emoji_context(ctx: Context<'_>, message: Message) -> Result<(), Error> {
+    let emojis = emoji_identifiers_from(&message.content);
+
+    let data = match emojis.first() {
+        Some(emoji) => Some((&emoji.name, emoji.url())),
+        None => None,
+    };
+
+    if let None = data {
+        ctx.reply(":x: Failed to retrieve any emoji from the message!")
+            .await?;
+
+        return Ok(());
+    }
+
+    let (name, url) = data.unwrap();
+    let builder = CreateAttachment::url(ctx.http(), &url).await?;
+
+    let res = match ctx
+        .guild_id()
+        .unwrap()
+        .create_emoji(&ctx, name, &builder.to_base64())
+        .await
+    {
+        Err(error) => format!(":x: Failed to clone emoji `{name}`: {:?}", dbg!(error)),
+        Ok(emoji) => format!(":white_check_mark: Emoji `{name}` cloned with success: {emoji}"),
     };
 
     ctx.reply(res).await?;
