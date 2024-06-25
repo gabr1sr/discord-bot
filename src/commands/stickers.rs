@@ -63,16 +63,47 @@ pub async fn remove(ctx: Context<'_>, name: String) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(context_menu_command = "Retrieve sticker image")]
+#[poise::command(context_menu_command = "Retrieve sticker image", category = "Stickers")]
 pub async fn retrieve_sticker_context(ctx: Context<'_>, message: Message) -> Result<(), Error> {
-    let stickers = message.sticker_items;
-
-    let res = match stickers.first() {
+    let res = match message.sticker_items.first() {
         None => ":x: Failed to retrieve sticker from message!".to_owned(),
         Some(sticker) => sticker_item_image_url(sticker),
     };
 
     ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(
+    context_menu_command = "Clone sticker",
+    required_bot_permissions = "CREATE_GUILD_EXPRESSIONS",
+    required_permissions = "CREATE_GUILD_EXPRESSIONS",
+    category = "Stickers",
+    guild_only
+)]
+pub async fn clone_sticker_context(ctx: Context<'_>, message: Message) -> Result<(), Error> {
+    let data = match message.sticker_items.first() {
+        None => None,
+        Some(sticker) => Some((sticker, sticker_item_image_url(sticker))),
+    };
+
+    if let None = data {
+        ctx.reply(":x: Failed to retrieve sticker from message!".to_owned())
+            .await?;
+        return Ok(());
+    }
+
+    let (sticker_item, image_url) = data.unwrap();
+    let sticker = sticker_item.to_sticker(&ctx.http()).await?;
+    let attachment = CreateAttachment::url(&ctx.http(), &image_url).await?;
+
+    let builder = CreateSticker::new(&sticker.name, attachment)
+        .tags(sticker.tags.join(", "))
+        .description(sticker.description.unwrap_or_default());
+
+    ctx.reply(create_sticker(ctx, &sticker.name, builder).await?)
+        .await?;
+
     Ok(())
 }
 

@@ -26,6 +26,7 @@ async fn main() {
         commands::emojis::clone_emoji_context(),
         commands::stickers::sticker(),
         commands::stickers::retrieve_sticker_context(),
+        commands::stickers::clone_sticker_context(),
     ];
 
     let framework = poise::Framework::builder()
