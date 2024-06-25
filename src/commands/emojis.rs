@@ -49,7 +49,7 @@ pub async fn remove(ctx: Context<'_>, emoji: Emoji) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(context_menu_command = "Retrieve emoji image")]
+#[poise::command(context_menu_command = "Retrieve emoji image", category = "Emojis")]
 pub async fn retrieve_emoji_context(ctx: Context<'_>, message: Message) -> Result<(), Error> {
     let emojis = emoji_identifiers_from(&message.content);
 
@@ -66,6 +66,7 @@ pub async fn retrieve_emoji_context(ctx: Context<'_>, message: Message) -> Resul
     context_menu_command = "Clone emoji",
     required_bot_permissions = "CREATE_GUILD_EXPRESSIONS",
     required_permissions = "CREATE_GUILD_EXPRESSIONS",
+    category = "Emojis",
     guild_only
 )]
 pub async fn clone_emoji_context(ctx: Context<'_>, message: Message) -> Result<(), Error> {
