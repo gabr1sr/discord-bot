@@ -1,10 +1,10 @@
-use serenity::all::{Attachment, CreateAttachment, CreateSticker, Sticker};
+use serenity::all::{Attachment, CreateAttachment, CreateSticker, Message, Sticker, StickerItem};
 
 use crate::{Context, Error};
 
 #[poise::command(
     slash_command,
-    subcommands("show", "add"),
+    subcommands("show", "add", "remove"),
     subcommand_required,
     category = "Stickers"
 )]
@@ -47,7 +47,36 @@ pub async fn add(
     Ok(())
 }
 
-async fn sticker_image_or_error_message(ctx: Context<'_>, name: &str) -> Result<String, Error> {
+#[poise::command(
+    slash_command,
+    required_bot_permissions = "MANAGE_GUILD_EXPRESSIONS",
+    required_permissions = "MANAGE_GUILD_EXPRESSIONS",
+    guild_only
+)]
+pub async fn remove(ctx: Context<'_>, name: String) -> Result<(), Error> {
+    let res = match get_sticker(ctx, &name).await? {
+        None => ":x: No sticker `{name}` found!".to_owned(),
+        Some(sticker) => delete_sticker(ctx, sticker).await?,
+    };
+
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+#[poise::command(context_menu_command = "Retrieve sticker image")]
+pub async fn retrieve_sticker_context(ctx: Context<'_>, message: Message) -> Result<(), Error> {
+    let stickers = message.sticker_items;
+
+    let res = match stickers.first() {
+        None => ":x: Failed to retrieve sticker from message!".to_owned(),
+        Some(sticker) => sticker_item_image_url(sticker),
+    };
+
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+async fn get_sticker(ctx: Context<'_>, name: &str) -> Result<Option<Sticker>, Error> {
     let stickers: Vec<Sticker> = ctx
         .guild_id()
         .unwrap()
@@ -57,14 +86,26 @@ async fn sticker_image_or_error_message(ctx: Context<'_>, name: &str) -> Result<
         .filter(|s| &s.name == name)
         .collect();
 
-    Ok(match stickers.first() {
+    if let Some(sticker) = stickers.first() {
+        return Ok(Some(sticker.clone()));
+    }
+
+    Ok(None)
+}
+
+async fn sticker_image_or_error_message(ctx: Context<'_>, name: &str) -> Result<String, Error> {
+    Ok(match get_sticker(ctx, name).await? {
         None => format!(":x: No sticker `{name}` found!"),
-        Some(sticker) => sticker_image_url(sticker),
+        Some(sticker) => sticker_image_url(&sticker),
     })
 }
 
 fn sticker_image_url(sticker: &Sticker) -> String {
     format!("{}?size=2048", sticker.image_url().unwrap())
+}
+
+fn sticker_item_image_url(sticker_item: &StickerItem) -> String {
+    format!("{}?size=2048", sticker_item.image_url().unwrap())
 }
 
 async fn create_sticker(
@@ -76,6 +117,22 @@ async fn create_sticker(
         match ctx.guild_id().unwrap().create_sticker(&ctx, builder).await {
             Err(error) => format!(":x: Failed to create sticker `{name}`: {:?}", error),
             Ok(_) => format!(":white_check_mark: Sticker `{name}` created with success!"),
+        },
+    )
+}
+
+async fn delete_sticker(ctx: Context<'_>, sticker: Sticker) -> Result<String, Error> {
+    let name = &sticker.name;
+
+    Ok(
+        match ctx
+            .guild_id()
+            .unwrap()
+            .delete_sticker(&ctx.http(), sticker.id)
+            .await
+        {
+            Err(error) => format!(":x: Failed to delete sticker `{name}`: {:?}", error),
+            Ok(_) => format!(":white_check_mark: Sticker `{name}` deleted with success!"),
         },
     )
 }
