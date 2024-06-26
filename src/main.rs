@@ -3,22 +3,32 @@ use poise::serenity_prelude as serenity;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub mod builders;
 pub mod commands;
+pub mod database;
 pub mod errors;
+pub mod models;
 pub mod utils;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[derive(Debug)]
-pub struct Data {}
+pub struct Data {
+    pool: sqlx::Pool<sqlx::Postgres>,
+}
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
 
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let database_url = std::env::var("DATABASE_URL").expect("missing DATABASE_URL");
     let intents = serenity::GatewayIntents::non_privileged();
+
+    let pool = sqlx::postgres::PgPool::connect(&database_url)
+        .await
+        .expect("failed to connect to database");
 
     let commands = vec![
         commands::emojis::emoji(),
@@ -27,6 +37,7 @@ async fn main() {
         commands::stickers::sticker(),
         commands::stickers::retrieve_sticker_context(),
         commands::stickers::clone_sticker_context(),
+        commands::tags::tag(),
     ];
 
     let framework = poise::Framework::builder()
@@ -68,7 +79,7 @@ async fn main() {
             Box::pin(async move {
                 println!("Logged in as {}", ready.user.name);
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {})
+                Ok(Data { pool })
             })
         })
         .build();
