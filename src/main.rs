@@ -5,7 +5,6 @@ use std::time::Duration;
 
 pub mod builders;
 pub mod commands;
-pub mod database;
 pub mod errors;
 pub mod models;
 pub mod utils;

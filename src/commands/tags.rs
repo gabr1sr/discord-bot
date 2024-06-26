@@ -1,8 +1,11 @@
-use crate::{builders::CreateTag, database::create_tag, Context, Error};
+use crate::builders::CreateTag;
+use crate::models::Tag;
+use crate::{Context, Error};
+use sqlx::{Pool, Postgres};
 
 #[poise::command(
     slash_command,
-    subcommands("add"),
+    subcommands("add", "show"),
     subcommand_required,
     category = "Tags"
 )]
@@ -22,4 +25,35 @@ pub async fn add(ctx: Context<'_>, name: String, content: String) -> Result<(), 
 
     ctx.reply(res).await?;
     Ok(())
+}
+
+#[poise::command(slash_command)]
+pub async fn show(ctx: Context<'_>, name: String) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let res = match get_tag(&ctx.data().pool, &name).await {
+        Err(error) => format!(":x: Failed to retrieve tag `{name}`: {:?}", error),
+        Ok(tag) => tag.content,
+    };
+
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+pub async fn create_tag(pool: &Pool<Postgres>, builder: CreateTag) -> Result<Tag, sqlx::Error> {
+    sqlx::query_as!(
+        Tag,
+        r#"INSERT INTO tags (name, content, owner) VALUES ($1, $2, $3) RETURNING id, name, content, owner"#,
+        builder.name,
+        builder.content,
+        builder.owner.get().to_string()
+    )
+        .fetch_one(pool)
+        .await
+}
+
+pub async fn get_tag(pool: &Pool<Postgres>, name: impl Into<String>) -> Result<Tag, sqlx::Error> {
+    sqlx::query_as!(Tag, r#"SELECT * FROM tags WHERE name = $1"#, name.into())
+        .fetch_one(pool)
+        .await
 }
