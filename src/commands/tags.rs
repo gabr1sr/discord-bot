@@ -1,11 +1,16 @@
 use crate::builders::CreateTag;
 use crate::models::Tag;
 use crate::{Context, Error};
+use poise::{
+    serenity_prelude as serenity, serenity_prelude::futures::TryStreamExt, serenity_prelude::UserId,
+};
 use sqlx::{Pool, Postgres};
+use std::collections::HashMap;
 
 #[poise::command(
     slash_command,
-    subcommands("add", "show", "edit", "remove"),
+    prefix_command,
+    subcommands("add", "show", "edit", "remove", "list"),
     subcommand_required,
     category = "Tags"
 )]
@@ -13,8 +18,8 @@ pub async fn tag(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(slash_command)]
-pub async fn add(ctx: Context<'_>, name: String, content: String) -> Result<(), Error> {
+#[poise::command(slash_command, prefix_command)]
+pub async fn add(ctx: Context<'_>, name: String, #[rest] content: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     let builder = CreateTag::new(&name, content, ctx.author());
 
@@ -27,8 +32,8 @@ pub async fn add(ctx: Context<'_>, name: String, content: String) -> Result<(), 
     Ok(())
 }
 
-#[poise::command(slash_command)]
-pub async fn show(ctx: Context<'_>, name: String) -> Result<(), Error> {
+#[poise::command(slash_command, prefix_command)]
+pub async fn show(ctx: Context<'_>, #[rest] name: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
     let res = match get_tag(&ctx.data().pool, &name).await {
@@ -40,8 +45,8 @@ pub async fn show(ctx: Context<'_>, name: String) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(slash_command)]
-pub async fn edit(ctx: Context<'_>, name: String, content: String) -> Result<(), Error> {
+#[poise::command(slash_command, prefix_command)]
+pub async fn edit(ctx: Context<'_>, name: String, #[rest] content: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     let builder = CreateTag::new(&name, content, ctx.author());
 
@@ -54,8 +59,8 @@ pub async fn edit(ctx: Context<'_>, name: String, content: String) -> Result<(),
     Ok(())
 }
 
-#[poise::command(slash_command)]
-pub async fn remove(ctx: Context<'_>, name: String) -> Result<(), Error> {
+#[poise::command(slash_command, prefix_command)]
+pub async fn remove(ctx: Context<'_>, #[rest] name: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     let builder = CreateTag::new(&name, "", ctx.author());
 
@@ -68,6 +73,110 @@ pub async fn remove(ctx: Context<'_>, name: String) -> Result<(), Error> {
 
     ctx.reply(res).await?;
     Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub async fn list(ctx: Context<'_>, owner: Option<UserId>) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+
+    let rows = match owner {
+        None => get_all_tags(&ctx.data().pool).await,
+        Some(owner) => get_owner_tags(&ctx.data().pool, owner).await,
+    };
+
+    paginate_tags(ctx, rows).await?;
+    Ok(())
+}
+
+async fn paginate_tags(
+    ctx: Context<'_>,
+    tags: std::pin::Pin<
+        Box<
+            dyn poise::futures_util::Stream<Item = Result<Tag, sqlx::Error>>
+                + std::marker::Send
+                + '_,
+        >,
+    >,
+) -> Result<(), Error> {
+    let ctx_id = ctx.id();
+    let prev_button_id = format!("{}prev", ctx_id);
+    let next_button_id = format!("{}next", ctx_id);
+
+    let mut chunks = tags.try_chunks(10);
+    let mut map: HashMap<u32, String> = HashMap::new();
+    let mut current_page: u32 = 0;
+
+    let reply = {
+        let components = serenity::CreateActionRow::Buttons(vec![
+            serenity::CreateButton::new(&prev_button_id).emoji('◀'),
+            serenity::CreateButton::new(&next_button_id).emoji('▶'),
+        ]);
+
+        let content = format_tags(chunks.try_next().await?);
+        map.insert(current_page, content.clone());
+
+        let embed = serenity::CreateEmbed::default()
+            .title("Tags List")
+            .description(content);
+
+        poise::CreateReply::default()
+            .embed(embed)
+            .components(vec![components])
+    };
+
+    ctx.send(reply).await?;
+
+    while let Some(press) = serenity::collector::ComponentInteractionCollector::new(ctx)
+        .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
+        .timeout(std::time::Duration::from_secs(60))
+        .await
+    {
+        if press.data.custom_id == next_button_id {
+            current_page += 1;
+
+            if !map.contains_key(&current_page) {
+                let content = format_tags(chunks.try_next().await?);
+
+                if !content.is_empty() {
+                    map.insert(current_page, content.clone());
+                } else {
+                    current_page = 0;
+                }
+            }
+        } else if press.data.custom_id == prev_button_id {
+            current_page = current_page.checked_sub(1).unwrap_or_default();
+        } else {
+            continue;
+        }
+
+        let content = map.get(&current_page).unwrap();
+
+        let embed = serenity::CreateEmbed::default()
+            .title("Tags List")
+            .description(content);
+
+        press
+            .create_response(
+                ctx.serenity_context(),
+                serenity::CreateInteractionResponse::UpdateMessage(
+                    serenity::CreateInteractionResponseMessage::new().embed(embed),
+                ),
+            )
+            .await?;
+    }
+
+    Ok(())
+}
+
+fn format_tags(tags: Option<Vec<Tag>>) -> String {
+    let Some(tags) = tags else {
+        return String::new();
+    };
+
+    tags.into_iter()
+        .map(|t| format!("- {}", t.name))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 async fn create_tag(pool: &Pool<Postgres>, builder: CreateTag) -> Result<Tag, sqlx::Error> {
@@ -86,6 +195,28 @@ async fn get_tag(pool: &Pool<Postgres>, name: impl Into<String>) -> Result<Tag, 
     sqlx::query_as!(Tag, r#"SELECT * FROM tags WHERE name = $1"#, name.into())
         .fetch_one(pool)
         .await
+}
+
+async fn get_all_tags(
+    pool: &Pool<Postgres>,
+) -> std::pin::Pin<
+    Box<dyn poise::futures_util::Stream<Item = Result<Tag, sqlx::Error>> + std::marker::Send + '_>,
+> {
+    sqlx::query_as!(Tag, r#"SELECT * FROM tags"#).fetch(pool)
+}
+
+async fn get_owner_tags(
+    pool: &Pool<Postgres>,
+    owner: impl Into<u64>,
+) -> std::pin::Pin<
+    Box<dyn poise::futures_util::Stream<Item = Result<Tag, sqlx::Error>> + std::marker::Send + '_>,
+> {
+    sqlx::query_as!(
+        Tag,
+        r#"SELECT * FROM tags WHERE owner = $1"#,
+        owner.into().to_string()
+    )
+    .fetch(pool)
 }
 
 async fn update_tag(pool: &Pool<Postgres>, builder: CreateTag) -> Result<Tag, sqlx::Error> {
