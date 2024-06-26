@@ -106,18 +106,24 @@ async fn paginate_tags(
     let mut map: HashMap<u32, String> = HashMap::new();
     let mut current_page: u32 = 0;
 
+    let first_content = format_tags(chunks.try_next().await?);
+
+    if first_content.is_empty() {
+        ctx.reply(":x: No tags found!").await?;
+        return Ok(());
+    }
+
     let reply = {
         let components = serenity::CreateActionRow::Buttons(vec![
             serenity::CreateButton::new(&prev_button_id).emoji('◀'),
             serenity::CreateButton::new(&next_button_id).emoji('▶'),
         ]);
 
-        let content = format_tags(chunks.try_next().await?);
-        map.insert(current_page, content.clone());
+        map.insert(current_page, first_content.clone());
 
         let embed = serenity::CreateEmbed::default()
             .title("Tags List")
-            .description(content);
+            .description(first_content);
 
         poise::CreateReply::default()
             .embed(embed)
