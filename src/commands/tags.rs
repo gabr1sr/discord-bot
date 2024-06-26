@@ -5,7 +5,7 @@ use sqlx::{Pool, Postgres};
 
 #[poise::command(
     slash_command,
-    subcommands("add", "show"),
+    subcommands("add", "show", "edit"),
     subcommand_required,
     category = "Tags"
 )]
@@ -40,20 +40,46 @@ pub async fn show(ctx: Context<'_>, name: String) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn create_tag(pool: &Pool<Postgres>, builder: CreateTag) -> Result<Tag, sqlx::Error> {
+#[poise::command(slash_command)]
+pub async fn edit(ctx: Context<'_>, name: String, content: String) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    let builder = CreateTag::new(&name, content, ctx.author());
+
+    let res = match update_tag(&ctx.data().pool, builder).await {
+        Err(_) => format!(":x: You're not the owner of the tag `{name}` or it doesn't exist!"),
+        Ok(_) => format!(":white_check_mark: Tag `{name}` updated with success!"),
+    };
+
+    ctx.reply(res).await?;
+    Ok(())
+}
+
+async fn create_tag(pool: &Pool<Postgres>, builder: CreateTag) -> Result<Tag, sqlx::Error> {
     sqlx::query_as!(
         Tag,
-        r#"INSERT INTO tags (name, content, owner) VALUES ($1, $2, $3) RETURNING id, name, content, owner"#,
+        r#"INSERT INTO tags (name, content, owner) VALUES ($1, $2, $3) RETURNING *"#,
         builder.name,
         builder.content,
         builder.owner.get().to_string()
     )
+    .fetch_one(pool)
+    .await
+}
+
+async fn get_tag(pool: &Pool<Postgres>, name: impl Into<String>) -> Result<Tag, sqlx::Error> {
+    sqlx::query_as!(Tag, r#"SELECT * FROM tags WHERE name = $1"#, name.into())
         .fetch_one(pool)
         .await
 }
 
-pub async fn get_tag(pool: &Pool<Postgres>, name: impl Into<String>) -> Result<Tag, sqlx::Error> {
-    sqlx::query_as!(Tag, r#"SELECT * FROM tags WHERE name = $1"#, name.into())
-        .fetch_one(pool)
-        .await
+async fn update_tag(pool: &Pool<Postgres>, builder: CreateTag) -> Result<Tag, sqlx::Error> {
+    sqlx::query_as!(
+        Tag,
+        r#"UPDATE tags SET content = $1 WHERE name = $2 AND owner = $3 RETURNING *"#,
+        builder.content,
+        builder.name,
+        builder.owner.get().to_string()
+    )
+    .fetch_one(pool)
+    .await
 }
