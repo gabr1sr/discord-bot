@@ -82,18 +82,14 @@ pub async fn retrieve_sticker_context(ctx: Context<'_>, message: Message) -> Res
     guild_only
 )]
 pub async fn clone_sticker_context(ctx: Context<'_>, message: Message) -> Result<(), Error> {
-    let data = match message.sticker_items.first() {
-        None => None,
-        Some(sticker) => Some((sticker, sticker_item_image_url(sticker))),
-    };
-
-    if let None = data {
+    let Some(sticker_item) = message.sticker_items.first() else {
         ctx.reply(":x: Failed to retrieve sticker from message!".to_owned())
             .await?;
-        return Ok(());
-    }
 
-    let (sticker_item, image_url) = data.unwrap();
+        return Ok(());
+    };
+
+    let image_url = sticker_item_image_url(sticker_item);
     let sticker = sticker_item.to_sticker(&ctx.http()).await?;
     let attachment = CreateAttachment::url(&ctx.http(), &image_url).await?;
 

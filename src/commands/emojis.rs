@@ -72,19 +72,15 @@ pub async fn retrieve_emoji_context(ctx: Context<'_>, message: Message) -> Resul
 pub async fn clone_emoji_context(ctx: Context<'_>, message: Message) -> Result<(), Error> {
     let emojis = emoji_identifiers_from(&message.content);
 
-    let data = match emojis.first() {
-        Some(emoji) => Some((&emoji.name, emoji.url())),
-        None => None,
-    };
-
-    if let None = data {
+    let Some(emoji) = emojis.first() else {
         ctx.reply(":x: Failed to retrieve any emoji from the message!")
             .await?;
 
         return Ok(());
-    }
+    };
 
-    let (name, url) = data.unwrap();
+    let name = &emoji.name;
+    let url = emoji.url();
     let builder = CreateAttachment::url(ctx.http(), &url).await?;
     let res = create_emoji(ctx, &name, &builder.to_base64()).await?;
     ctx.reply(res).await?;
