@@ -39,6 +39,7 @@ async fn main() {
         commands::stickers::retrieve_sticker_context(),
         commands::stickers::clone_sticker_context(),
         commands::tags::tag(),
+        commands::moderation::clear(),
     ];
 
     let framework = poise::Framework::builder()
