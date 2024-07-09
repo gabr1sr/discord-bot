@@ -1,44 +1,20 @@
+use dotenv::dotenv;
+use poise::serenity_prelude as serenity;
 use std::sync::Arc;
 use std::time::Duration;
 
-use dotenv::dotenv;
-use models::AnimalModel;
-use poise::serenity_prelude as serenity;
-
+pub mod builders;
 pub mod commands;
-pub mod database;
+pub mod errors;
 pub mod models;
-pub mod translation;
 pub mod utils;
-
-use database::Database;
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
+#[derive(Debug)]
 pub struct Data {
-    translations: translation::Translations,
-    database: Arc<Database>,
-    bang_channel: Arc<Mutex<u64>>,
-    bang_available: Arc<Mutex<bool>>,
-    bang_handles: Arc<Mutex<Vec<JoinHandle<Result<(), Error>>>>>,
-    last_animal: Arc<Mutex<AnimalModel>>,
-}
-
-async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
-    match error {
-        poise::FrameworkError::Setup { error, .. } => panic!("Failed to start bot: {:?}", error),
-        poise::FrameworkError::Command { error, ctx, .. } => {
-            println!("Error in command `{}`: {:?}", ctx.command().name, error);
-        }
-        error => {
-            if let Err(e) = poise::builtins::on_error(error).await {
-                println!("Error while handling error: {}", e)
-            }
-        }
-    }
+    pool: sqlx::Pool<sqlx::Postgres>,
 }
 
 #[tokio::main]
@@ -46,61 +22,40 @@ async fn main() {
     dotenv().ok();
 
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
-    let db_url = std::env::var("DATABASE_URL").expect("missing DATABASE_URL");
-
-    let database = Database::new(db_url).await.unwrap();
+    let database_url = std::env::var("DATABASE_URL").expect("missing DATABASE_URL");
 
     let intents =
         serenity::GatewayIntents::non_privileged() | serenity::GatewayIntents::MESSAGE_CONTENT;
 
-    let mut commands = vec![
-        commands::misc::ping(),
-        commands::utility::help(),
-        commands::misc::database(),
-        commands::infractions::infractions(),
-        commands::moderation::punish(),
-        commands::moderation::kick(),
-        commands::moderation::timeout(),
-        commands::moderation::ban(),
-        commands::moderation::unban(),
-        commands::moderation::untimeout(),
-        commands::moderation::strike(),
+    let pool = sqlx::postgres::PgPool::connect(&database_url)
+        .await
+        .expect("failed to connect to database");
+
+    let commands = vec![
+        commands::emojis::emoji(),
+        commands::emojis::retrieve_emoji_context(),
+        commands::emojis::clone_emoji_context(),
+        commands::stickers::sticker(),
+        commands::stickers::retrieve_sticker_context(),
+        commands::stickers::clone_sticker_context(),
         commands::tags::tag(),
-        commands::emoji::emoji(),
-        commands::bang::startbang(),
-        commands::bang::bang(),
-        commands::bang::stopbang(),
-        commands::bang::ranking(),
-        commands::animal::animal(),
-        commands::moderation::slowmode(),
-        commands::moderation::lock(),
         commands::moderation::clear(),
-        commands::sticker::sticker(),
-        commands::sticker::context_get_sticker(),
-        commands::sticker::context_clone_sticker(),
+        commands::moderation::kick::kick(),
+        commands::moderation::ban::ban(),
     ];
-
-    let translations = translation::read_ftl().expect("failed to read translation files");
-    translation::apply_translations(&translations, &mut commands);
-
-    let last_animal = AnimalModel {
-        id: 0,
-        emoji: "".to_owned(),
-        animal: "".to_owned(),
-        points: 0,
-    };
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands,
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some("k!".into()),
+                case_insensitive_commands: true,
                 edit_tracker: Some(Arc::new(poise::EditTracker::for_timespan(
                     Duration::from_secs(3600),
                 ))),
                 ..Default::default()
             },
-            on_error: |error| Box::pin(on_error(error)),
+            on_error: |error| Box::pin(errors::on_error(error)),
             pre_command: |ctx| {
                 Box::pin(async move {
                     println!("Executing command {}...", ctx.command().qualified_name);
@@ -128,14 +83,7 @@ async fn main() {
             Box::pin(async move {
                 println!("Logged in as {}", ready.user.name);
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(Data {
-                    translations,
-                    database: Arc::new(database),
-                    bang_channel: Arc::new(Mutex::new(0)),
-                    bang_available: Arc::new(Mutex::new(false)),
-                    bang_handles: Arc::new(Mutex::new(Vec::new())),
-                    last_animal: Arc::new(Mutex::new(last_animal)),
-                })
+                Ok(Data { pool })
             })
         })
         .build();
