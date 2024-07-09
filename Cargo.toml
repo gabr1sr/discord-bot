@@ -5,8 +5,11 @@ edition = "2021"
 
 [dependencies]
 dotenv = "0.15.0"
+percent-encoding = "2.3.1"
 poise = "0.6.1"
 regex = "1.10.5"
+reqwest = "0.12.5"
+serde = { version = "1.0.204", features = ["derive"] }
 serenity = { version = "0.12.2", features = ["client", "gateway", "rustls_backend", "cache", "model"] }
 sqlx = { version = "0.7.4", features = ["postgres", "chrono", "runtime-async-std", "tls-rustls"] }
 tokio = { version = "1.38.0", features = ["macros", "rt-multi-thread"] }

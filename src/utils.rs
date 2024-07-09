@@ -1,9 +1,12 @@
+use crate::Context;
+use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use regex::Regex;
 use serenity::{
     all::{parse_emoji, EmojiIdentifier},
     model::id::UserId,
 };
-use std::str::FromStr;
+use std::collections::HashMap;
+use std::{borrow::Cow, str::FromStr};
 
 pub fn user_ids_from(message: &str) -> Vec<UserId> {
     let re = Regex::new(r"(?P<id>[0-9]+)").unwrap();
@@ -21,6 +24,41 @@ pub fn emoji_identifiers_from(message: &str) -> Vec<EmojiIdentifier> {
         .map(|m| m.as_str())
         .map(|e| parse_emoji(e).unwrap())
         .collect()
+}
+
+pub fn format_user_ids_list(user_ids: Vec<UserId>) -> String {
+    user_ids
+        .into_iter()
+        .map(|u| format!("- <@{}>", u.get()))
+        .collect::<Vec<String>>()
+        .join("\n")
+}
+
+pub fn user_ids_below_user(
+    ctx: &Context<'_>,
+    user_ids: Vec<UserId>,
+    user_id: UserId,
+) -> Vec<UserId> {
+    let guild = ctx.guild().unwrap();
+
+    user_ids
+        .into_iter()
+        .filter(|u| guild.greater_member_hierarchy(&ctx, user_id, u).is_some())
+        .collect()
+}
+
+pub fn reason_into_header(reason: &str) -> HashMap<String, String> {
+    let mut headers = HashMap::new();
+
+    // "The X-Audit-Log-Reason header supports 1-512 URL-encoded UTF-8 characters."
+    // https://discord.com/developers/docs/resources/audit-log#audit-log-entry-object
+    let header_value = match Cow::from(utf8_percent_encode(reason, NON_ALPHANUMERIC)) {
+        Cow::Borrowed(value) => String::from(value),
+        Cow::Owned(value) => value,
+    };
+
+    headers.insert("X-Audit-Log-Reason".to_string(), header_value);
+    headers
 }
 
 #[test]
